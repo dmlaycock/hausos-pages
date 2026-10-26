@@ -4,21 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>HausOS - partner holiday planner</title>
+<title>HausOS - partner availability</title>
 <!--
-  HausOS partner holiday planner v1.1.0 (26 Oct 2026)
-  1.1.0: partner columns show initials at every width (same width for all); a two-click
-         range confirms with just an optional note (no date fields); Add absence kept for
-         dates beyond the grid.
+  HausOS partner availability planner v1.2.0 (26 Oct 2026)
   Static page served from GitHub Pages. Talks to the partner-availability Edge Function
   (JSON). Sign-in by magic link: ?t=TOKEN is exchanged for a 30-day session kept on this
-  device. Days down, partners across; the last 7 days are visible but locked; today and
-  later are editable. Design: Lead Allocation Engine - Design v5.3 (26 Oct 2026) §3.
+  device. Days down, partners across; the last 7 days are visible but locked.
+  v1.2.0: one click on a cell flips that day between Available and Not available. No
+  confirmations, no notes, no forms (David, 26 Oct: KISS - a mistake is one click to undo).
+  Design: Lead Allocation Engine - Design v5.3 (26 Oct 2026) §3.
 -->
 <style>
   :root { --ink:#1f2328; --muted:#6b7280; --line:#e5e7eb; --ok:#1a7f37; --no:#b42318; --bg:#fff; --card:#f9fafb;
-          --hol:#fcd34d; --hol-ink:#78350f; --away:#cbd5e1; --away-ink:#1e293b; --oth:#93c5fd; --oth-ink:#1e3a8a;
-          --today:#eef2ff; --locked:#f3f4f6; --wkend:#fafafa; --sel:#bbf7d0; }
+          --away:#fcd34d; --away-ink:#78350f; --today:#eef2ff; --locked:#f3f4f6; --wkend:#fafafa; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
   main { max-width:980px; margin:0 auto; padding:20px 12px 60px; }
@@ -27,65 +25,49 @@
   .sub { color:var(--muted); font-size:13px; margin:2px 0 0; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin:0 0 14px; }
   .btn { display:inline-block; padding:9px 14px; border-radius:7px; color:#fff; text-decoration:none; font-weight:600; border:0; font-size:14px; cursor:pointer; background:var(--ok); }
-  .btn.no { background:var(--no); } .btn.ghost { background:#fff; color:var(--ink); border:1px solid #cbd5e1; } .btn.sm { padding:6px 10px; font-size:13px; }
+  .btn.ghost { background:#fff; color:var(--ink); border:1px solid #cbd5e1; } .btn.sm { padding:6px 10px; font-size:13px; }
   .btn[disabled] { opacity:.55; cursor:default; }
   label { display:block; font-weight:600; font-size:13px; margin:10px 0 4px; }
-  input, select, textarea { width:100%; font:inherit; padding:8px; border:1px solid #cbd5e1; border-radius:7px; background:#fff; }
+  input { width:100%; font:inherit; padding:8px; border:1px solid #cbd5e1; border-radius:7px; background:#fff; }
   .muted { color:var(--muted); font-size:13px; }
   .err { color:var(--no); font-size:13px; min-height:18px; margin:8px 0 0; }
   .hidden { display:none !important; }
   .strip { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .chip { background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; border-radius:999px; padding:4px 10px; font-size:13px; }
   .chip.none { background:#f0fdf4; border-color:#bbf7d0; color:#14532d; }
-  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin:6px 0 10px; }
-  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-right:4px; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin:6px 0 6px; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-right:4px; border:1px solid #e5e7eb; }
   .wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:72vh; }
-  table.grid { border-collapse:separate; border-spacing:0; width:100%; font-size:13px; }
-  .grid th { font-size:13px; letter-spacing:.02em; }
-  .grid th { position:sticky; top:0; background:#fff; z-index:3; border-bottom:2px solid var(--line); padding:8px 6px; text-align:center; font-weight:600; white-space:nowrap; }
-  .grid th:first-child, .grid td:first-child { position:sticky; left:0; background:#fff; z-index:2; text-align:left; white-space:nowrap; min-width:92px; border-right:1px solid var(--line); }
+  table.grid { border-collapse:separate; border-spacing:0; width:100%; font-size:13px; table-layout:fixed; }
+  .grid th { position:sticky; top:0; background:#fff; z-index:3; border-bottom:2px solid var(--line); padding:8px 4px; text-align:center; font-weight:600; white-space:nowrap; letter-spacing:.02em; }
+  .grid th:first-child, .grid td:first-child { position:sticky; left:0; background:#fff; z-index:2; text-align:left; white-space:nowrap; width:96px; min-width:96px; border-right:1px solid var(--line); }
   .grid th:first-child { z-index:4; }
-  .grid td { border-bottom:1px solid #f1f5f9; padding:0; height:30px; text-align:center; }
+  .grid td { border-bottom:1px solid #f1f5f9; padding:0; height:32px; text-align:center; }
   .grid td.day { padding:4px 8px; font-variant-numeric:tabular-nums; }
   .grid tr.wkend td { background:var(--wkend); }
   .grid tr.locked td { background:var(--locked); color:#9ca3af; }
   .grid tr.locked td:first-child::after { content:" \1F512"; font-size:10px; }
   .grid tr.today td { background:var(--today); }
   .grid tr.today td:first-child { font-weight:700; color:var(--ink); }
-  .grid tr.month td { background:#fff; color:var(--ink); font-weight:700; text-align:left; padding:10px 8px 4px; border-bottom:1px solid var(--line); position:relative; z-index:1; }
-  .grid td.cell { cursor:pointer; }
+  .grid tr.month td { background:#fff; color:var(--ink); font-weight:700; text-align:left; padding:10px 8px 4px; border-bottom:1px solid var(--line); }
+  .grid td.cell { cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; }
   .grid tr.locked td.cell { cursor:default; }
   .grid td.cell:not(.abs):hover { outline:2px solid #a7f3d0; outline-offset:-2px; }
   .grid tr.locked td.cell:hover { outline:none; }
-  .grid td.abs { font-size:11px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; padding:0 4px; }
-  .grid td.abs.holiday { background:var(--hol) !important; color:var(--hol-ink); }
-  .grid td.abs.away { background:var(--away) !important; color:var(--away-ink); }
-  .grid td.abs.other { background:var(--oth) !important; color:var(--oth-ink); }
-  .grid tr.locked td.abs { opacity:.6; }
-  .grid td.sel { background:var(--sel) !important; }
-  .grid td.start::before { content:"\25BC"; font-size:9px; color:#065f46; }
-  .list table { width:100%; border-collapse:collapse; font-size:14px; }
-  .list td, .list th { padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
-  .list th { font-size:12px; color:var(--muted); font-weight:600; }
-  .sheet { position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:flex-end; justify-content:center; z-index:50; }
-  .sheet .box { background:#fff; width:100%; max-width:520px; border-radius:14px 14px 0 0; padding:18px 16px 24px; max-height:92vh; overflow:auto; }
-  @media (min-width:640px) { .sheet { align-items:center; } .sheet .box { border-radius:14px; } }
-  .box h2 { font-size:17px; margin:0 0 6px; }
-  .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
-  .two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .check { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:14px; } .check input { width:auto; }
+  .grid td.abs { background:var(--away) !important; color:var(--away-ink); font-size:14px; }
+  .grid td.abs::after { content:"\2022"; }
+  .grid tr.locked td.abs { opacity:.55; }
+  .grid td.busy { opacity:.5; }
   .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#111827; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; z-index:60; }
   .signin { max-width:420px; margin:40px auto; }
-  table.grid { table-layout:fixed; }
-  .grid th:first-child, .grid td:first-child { width:96px; min-width:96px; }
-  @media (max-width:640px) { .grid th:first-child, .grid td:first-child { width:76px; min-width:76px; } .grid th { padding:8px 2px; } .grid td.abs { font-size:0; padding:0; } .grid td.abs::after { content:"\2022"; font-size:16px; } }
+  @media (max-width:640px) { .grid th:first-child, .grid td:first-child { width:76px; min-width:76px; } .grid th { padding:8px 2px; } }
 </style>
 </head>
 <body>
 <main>
   <div class="top">
-    <div><h1>Partner holiday planner</h1><p class="sub" id="sub">Loading...</p></div>
-    <div id="topbtns" class="hidden"><button class="btn ghost" id="addbtn">Add absence (dates beyond the grid)</button> <button class="btn ghost" id="outbtn">Sign out</button></div>
+    <div><h1>Partner availability</h1><p class="sub" id="sub">Loading...</p></div>
+    <div id="topbtns" class="hidden"><button class="btn ghost sm" id="outbtn">Sign out</button></div>
   </div>
   <div id="view"></div>
   <p class="muted" id="foot"></p>
@@ -96,12 +78,12 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/partner-availability";
   var SHOW_WEEKS = 8, STEP_WEEKS = 8;
   var view = document.getElementById("view"), sub = document.getElementById("sub"), foot = document.getElementById("foot"), topbtns = document.getElementById("topbtns");
-  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, sel: null };
+  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {} };   // away["partner|day"] = true
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
   function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  function toast(msg) { var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2600); }
+  function toast(msg) { var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2200); }
 
   // ---- dates (YYYY-MM-DD strings; arithmetic in UTC so clock changes cannot shift a day)
   function parse(s) { var p = s.split("-"); return Date.UTC(+p[0], +p[1] - 1, +p[2]); }
@@ -112,7 +94,7 @@
   function longLabel(s) { var d = new Date(parse(s)); return DOW[d.getUTCDay()] + " " + d.getUTCDate() + " " + MON[d.getUTCMonth()]; }
   function monthLabel(s) { var d = new Date(parse(s)); return MON[d.getUTCMonth()] + " " + d.getUTCFullYear(); }
   function isWeekend(s) { var d = new Date(parse(s)).getUTCDay(); return d === 0 || d === 6; }
-  function covers(a, day) { return a.first_day <= day && (a.last_day === null || a.last_day >= day); }
+  function initials(name) { return String(name || "").split(/[\s-]+/).filter(Boolean).map(function (w) { return w[0].toUpperCase(); }).join("").slice(0, 3); }
 
   // ---- API
   function call(body) {
@@ -124,16 +106,26 @@
   function reload() {
     return call({ action: "list" }).then(function (r) {
       if (!r.ok) { if (r._status === 401) { signedOut(); return; } throw new Error(r.message || r.error); }
-      state.data = r; render();
+      state.data = r; indexAway(); render();
     }).catch(function (e) { sub.textContent = ""; view.innerHTML = '<div class="card"><b>Could not load the planner.</b><p class="muted">' + h(e.message || e) + '</p><p><button class="btn ghost" onclick="location.reload()">Try again</button></p></div>'; });
   }
+  // Expand absence rows (any length) into a set of partner|day keys for the visible range.
+  function indexAway() {
+    var d = state.data, map = {};
+    d.absences.forEach(function (a) {
+      var end = a.last_day === null ? d.to : (a.last_day < d.to ? a.last_day : d.to);
+      for (var day = (a.first_day < d.from ? d.from : a.first_day); day <= end; day = addDays(day, 1)) map[a.partner_id + "|" + day] = true;
+    });
+    state.away = map;
+  }
+  function isAway(p, day) { return !!state.away[p + "|" + day]; }
 
   // ---- sign in
   function signedOut() {
-    state.session = null; store("hausos_planner_session", null); store("hausos_planner_user", null);
-    topbtns.classList.add("hidden"); sub.textContent = "Sign in to see and record partner absences."; foot.textContent = "";
+    state.session = null; store("hausos_planner_session", null);
+    topbtns.classList.add("hidden"); sub.textContent = "Sign in to see and change partner availability."; foot.textContent = "";
     view.innerHTML = '<div class="card signin"><label for="email">Your email address</label><input id="email" type="email" autocomplete="email" placeholder="name@hausproperties.com">' +
-      '<p class="err" id="err"></p><div class="row"><button class="btn" id="go">Email me a sign-in link</button></div>' +
+      '<p class="err" id="err"></p><p><button class="btn" id="go">Email me a sign-in link</button></p>' +
       '<p class="muted">The link works once and expires in 30 minutes. After that you stay signed in on this device for 30 days.</p></div>';
     var go = document.getElementById("go"), email = document.getElementById("email"), err = document.getElementById("err");
     function send() {
@@ -156,7 +148,7 @@
       call({ action: "session", token: t }).then(function (r) {
         history.replaceState(null, "", location.pathname);
         if (!r.ok) { signedOut(); document.getElementById("err").textContent = r.message || "That link did not work."; return; }
-        state.session = r.session; store("hausos_planner_session", r.session); store("hausos_planner_user", r.name || r.email);
+        state.session = r.session; store("hausos_planner_session", r.session);
         reload();
       }).catch(function () { signedOut(); });
       return;
@@ -170,33 +162,33 @@
   function render() {
     var d = state.data;
     topbtns.classList.remove("hidden");
-    sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". The last 7 days are locked; today onwards can be changed.";
-    foot.textContent = "HausOS planner v1.1.0 (API v" + d.version + "). The allocation engine reads this page's data the moment a lead arrives.";
-    var html = '<div class="card"><div class="strip"><b style="font-size:13px">Away this week:</b>' + strip() + '</div></div>';
-    html += '<div class="legend"><span><i style="background:var(--hol)"></i>Holiday</span><span><i style="background:var(--away)"></i>Away until further notice</span><span><i style="background:var(--oth)"></i>Other</span><span><i style="background:var(--locked)"></i>Locked (last 7 days)</span><span>Tap the first day, then the last day, in a partner\'s column; tap a block to see or change it.</span></div>' + '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
+    sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. The last 7 days are locked.";
+    foot.textContent = "HausOS planner v1.2.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
+    var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
+    html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked (last 7 days)</span></div>';
+    html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
     html += '<div class="wrap">' + grid() + '</div>';
-    html += '<p style="margin:10px 0 18px"><button class="btn ghost sm" id="more">Show further ahead</button> <span class="muted" id="range"></span></p>';
-    html += '<h2 style="font-size:17px;margin:0 0 8px">Upcoming and current absences</h2><div class="list card">' + list() + '</div>';
+    html += '<p style="margin:10px 0 0"><button class="btn ghost sm" id="more">Show further ahead</button> <span class="muted" id="range"></span></p>';
     view.innerHTML = html;
     document.getElementById("range").textContent = "Showing " + longLabel(d.from) + " to " + longLabel(visibleTo()) + ".";
     document.getElementById("more").onclick = function () { state.showWeeks += STEP_WEEKS; render(); };
     bind();
-    var today = document.querySelector("tr.today"), wrap = document.querySelector(".wrap"); if (today && wrap && !state.sel) wrap.scrollTop = Math.max(0, today.offsetTop - wrap.clientHeight / 3);
+    var today = document.querySelector("tr.today"), wrap = document.querySelector(".wrap"); if (today && wrap) wrap.scrollTop = Math.max(0, today.offsetTop - wrap.clientHeight / 3);
   }
   function visibleTo() { var t = addDays(state.data.today, state.showWeeks * 7); return t < state.data.to ? t : state.data.to; }
-  function initials(name) { return String(name || "").split(/[\s-]+/).filter(Boolean).map(function (w) { return w[0].toUpperCase(); }).join("").slice(0, 3); }
-  function partnerName(id) { var p = state.data.partners.filter(function (x) { return x.partner_id === id; })[0]; return p ? p.full_name : id; }
 
-  function strip() {
+  // Runs of consecutive not-available days per partner, from today, for the strip.
+  function stripHtml() {
     var d = state.data, end = addDays(d.today, 6), out = [];
     d.partners.forEach(function (p) {
-      var a = d.absences.filter(function (x) { return x.partner_id === p.partner_id && x.first_day <= end && (x.last_day === null || x.last_day >= d.today); })
-        .sort(function (x, y) { return x.first_day < y.first_day ? -1 : 1; })[0];
-      if (!a) return;
-      var txt = p.full_name.split(" ")[0] + ": " + (a.first_day <= d.today ? "away" : "away from " + label(a.first_day)) + (a.last_day === null ? " until further notice" : ", back " + label(addDays(a.last_day, 1)));
+      var first = null;
+      for (var day = d.today; day <= end; day = addDays(day, 1)) if (isAway(p.partner_id, day)) { first = day; break; }
+      if (!first) return;
+      var last = first; while (isAway(p.partner_id, addDays(last, 1))) last = addDays(last, 1);
+      var txt = p.full_name.split(" ")[0] + ": " + (first === d.today ? "away" : "away from " + label(first)) + (last >= d.to ? "" : ", back " + label(addDays(last, 1)));
       out.push('<span class="chip">' + h(txt) + '</span>');
     });
-    return out.length ? out.join("") : '<span class="chip none">Everyone is available</span>';
+    return '<b style="font-size:13px">Not available this week:</b>' + (out.length ? out.join("") : '<span class="chip none">Everyone is available</span>');
   }
 
   function grid() {
@@ -207,130 +199,40 @@
       if (m !== lastMonth) { rows.push('<tr class="month"><td colspan="' + (d.partners.length + 1) + '">' + h(m) + '</td></tr>'); lastMonth = m; }
       var locked = day < d.today, cls = (locked ? "locked " : "") + (day === d.today ? "today " : "") + (isWeekend(day) ? "wkend" : "");
       var cells = d.partners.map(function (p) {
-        var a = d.absences.filter(function (x) { return x.partner_id === p.partner_id && covers(x, day); })[0];
-        var sel = state.sel && state.sel.partner === p.partner_id && !a && (day === state.sel.first || (state.sel.hover && day > state.sel.first && day <= state.sel.hover));
-        if (a) return '<td class="cell abs ' + h(a.kind) + '" data-id="' + h(a.id) + '" data-day="' + day + '" data-p="' + h(p.partner_id) + '" title="' + h(a.note || a.kind) + '">' + (day === a.first_day || day === d.from ? h(a.note || (a.kind === "away" ? "away" : "holiday")) : "") + '</td>';
-        return '<td class="cell' + (sel ? " sel" : "") + (state.sel && state.sel.partner === p.partner_id && day === state.sel.first ? " start" : "") + '" data-day="' + day + '" data-p="' + h(p.partner_id) + '"></td>';
+        return '<td class="cell' + (isAway(p.partner_id, day) ? " abs" : "") + '" data-day="' + day + '" data-p="' + h(p.partner_id) + '" title="' + h(p.full_name + " " + longLabel(day)) + '"></td>';
       }).join("");
       rows.push('<tr class="' + cls.trim() + '"><td class="day">' + h(label(day)) + '</td>' + cells + '</tr>');
     }
     return '<table class="grid">' + head + rows.join("") + '</table>';
   }
 
-  function list() {
-    var d = state.data, items = d.absences.filter(function (x) { return x.last_day === null || x.last_day >= d.today; });
-    if (!items.length) return '<p class="muted" style="margin:0">Nothing recorded from today onwards.</p>';
-    return '<table><tr><th>Partner</th><th>Days</th><th>Note</th><th>Recorded by</th><th></th></tr>' + items.map(function (a) {
-      var running = a.first_day <= d.today;
-      return '<tr><td>' + h(a.partner_name) + '</td><td>' + h(a.last_day === null ? "From " + longLabel(a.first_day) + " until further notice" : (a.first_day === a.last_day ? longLabel(a.first_day) : longLabel(a.first_day) + " to " + longLabel(a.last_day))) + '</td>' +
-        '<td>' + h(a.note || "") + '</td><td class="muted">' + h((a.created_by || "").split("@")[0]) + '</td>' +
-        '<td style="white-space:nowrap">' + (running ? '<button class="btn no sm" data-back="' + h(a.id) + '">Back early</button>' : '<button class="btn ghost sm" data-cancel="' + h(a.id) + '">Cancel</button>') + '</td></tr>';
-    }).join("") + '</table>';
-  }
-
-  // ---- interaction
+  // ---- one click = toggle (optimistic; reverts if the API says no)
   function bind() {
     document.querySelectorAll("td.cell").forEach(function (td) {
       td.onclick = function () {
-        var tr = td.parentNode; if (tr.classList.contains("locked") && !td.dataset.id) return;
-        if (td.dataset.id) { showAbsence(td.dataset.id); return; }
-        var p = td.dataset.p, day = td.dataset.day;
-        if (!state.sel || state.sel.partner !== p) { state.sel = { partner: p, first: day }; render(); return; }
-        if (day < state.sel.first) { state.sel = { partner: p, first: day }; render(); return; }
-        quickAdd(p, state.sel.first, day);
+        if (td.parentNode.classList.contains("locked") || td.classList.contains("busy")) return;
+        var p = td.dataset.p, day = td.dataset.day, key = p + "|" + day, was = !!state.away[key];
+        if (was) delete state.away[key]; else state.away[key] = true;
+        td.classList.toggle("abs", !was); td.classList.add("busy");
+        var strip = document.querySelector(".strip"); if (strip) strip.innerHTML = stripHtml();
+        call({ action: "toggle", partner_id: p, day: day }).then(function (r) {
+          td.classList.remove("busy");
+          if (!r.ok) {
+            if (was) state.away[key] = true; else delete state.away[key];
+            td.classList.toggle("abs", was); if (strip) strip.innerHTML = stripHtml();
+            toast(r.message || r.error || "Not saved"); if (r._status === 401) signedOut();
+          }
+        }).catch(function () {
+          td.classList.remove("busy");
+          if (was) state.away[key] = true; else delete state.away[key];
+          td.classList.toggle("abs", was); if (strip) strip.innerHTML = stripHtml();
+          toast("Could not reach HausOS - not saved");
+        });
       };
-      td.onmouseenter = function () { if (state.sel && state.sel.partner === td.dataset.p && !td.dataset.id) { state.sel.hover = td.dataset.day; paintHover(); } };
-    });
-    document.querySelectorAll("[data-cancel]").forEach(function (b) { b.onclick = function () { act("cancel", b.dataset.cancel, "Cancel this absence?"); }; });
-    document.querySelectorAll("[data-back]").forEach(function (b) { b.onclick = function () { act("back_early", b.dataset.back, "End this absence from today? The days already taken stay as they are."); }; });
-  }
-  function paintHover() {
-    var s = state.sel; if (!s) return;
-    document.querySelectorAll('td.cell[data-p="' + s.partner + '"]').forEach(function (td) {
-      var day = td.dataset.day, on = !td.dataset.id && day >= s.first && day <= (s.hover || s.first) && td.parentNode.classList.contains("locked") === false;
-      td.classList.toggle("sel", on);
     });
   }
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && state.sel) { state.sel = null; render(); } });
 
-  document.getElementById("addbtn").onclick = function () { openAdd({}); };
   document.getElementById("outbtn").onclick = function () { call({ action: "logout" }).catch(function () {}).then(signedOut); };
-
-  function sheet(inner) {
-    var s = document.createElement("div"); s.className = "sheet"; s.innerHTML = '<div class="box">' + inner + '</div>';
-    s.onclick = function (e) { if (e.target === s) close(); };
-    function close() { s.remove(); state.sel = null; render(); }
-    document.body.appendChild(s); s.close = close; return s;
-  }
-
-  function quickAdd(partnerId, first, last) {
-    var name = partnerName(partnerId);
-    var days = first === last ? longLabel(first) : longLabel(first) + " to " + longLabel(last);
-    var s = sheet('<h2>' + h(name) + ' away</h2><p style="margin:0 0 4px;font-size:16px">' + h(days) + '</p>' +
-      '<p class="muted" style="margin:0">Back ' + h(longLabel(addDays(last, 1))) + '.</p>' +
-      '<label for="n">Note (optional)</label><input id="n" placeholder="e.g. annual leave, training">' +
-      '<p class="err" id="e"></p><div class="row"><button class="btn" id="save">Save</button><button class="btn ghost" id="x">Cancel</button></div>');
-    var $ = function (id) { return s.querySelector("#" + id); };
-    $("x").onclick = s.close;
-    $("n").focus();
-    $("n").onkeydown = function (e) { if (e.key === "Enter") $("save").click(); };
-    $("save").onclick = function () {
-      $("save").disabled = true;
-      call({ action: "add", partner_id: partnerId, first_day: first, last_day: last, note: $("n").value }).then(function (r) {
-        if (!r.ok) { $("save").disabled = false; $("e").textContent = r.message || r.error; return; }
-        toast("Saved: " + name + " away " + days);
-        s.remove(); state.sel = null; reload();
-      }).catch(function () { $("save").disabled = false; $("e").textContent = "Could not reach HausOS."; });
-    };
-  }
-
-  function openAdd(pre) {
-    var d = state.data;
-    var opts = d.partners.map(function (p) { return '<option value="' + h(p.partner_id) + '"' + (pre.partner_id === p.partner_id ? " selected" : "") + '>' + h(p.full_name) + '</option>'; }).join("");
-    var s = sheet('<h2>Add an absence</h2>' +
-      '<label for="p">Partner</label><select id="p"><option value="">Choose a partner</option>' + opts + '</select>' +
-      '<div class="two"><div><label for="f">First day</label><input id="f" type="date" min="' + d.today + '" value="' + h(pre.first_day || d.today) + '"></div>' +
-      '<div><label for="l">Last day</label><input id="l" type="date" min="' + d.today + '" value="' + h(pre.last_day || pre.first_day || d.today) + '"></div></div>' +
-      '<div class="check"><input type="checkbox" id="open"><label for="open" style="margin:0;font-weight:500">Away until further notice (no last day)</label></div>' +
-      '<label for="n">Note (optional)</label><input id="n" placeholder="e.g. annual leave, training">' +
-      '<p class="err" id="e"></p><div class="row"><button class="btn" id="save">Save</button><button class="btn ghost" id="x">Cancel</button></div>');
-    var $ = function (id) { return s.querySelector("#" + id); };
-    $("open").onchange = function () { $("l").disabled = this.checked; };
-    $("x").onclick = s.close;
-    $("save").onclick = function () {
-      var body = { action: "add", partner_id: $("p").value, first_day: $("f").value, last_day: $("open").checked ? null : $("l").value, note: $("n").value };
-      if (!body.partner_id) { $("e").textContent = "Choose a partner."; return; }
-      if (!body.first_day) { $("e").textContent = "Choose the first day."; return; }
-      if (body.last_day !== null && !body.last_day) { $("e").textContent = "Choose the last day, or tick until further notice."; return; }
-      if (body.last_day !== null && body.last_day < body.first_day) { $("e").textContent = "The last day is before the first day."; return; }
-      $("save").disabled = true;
-      call(body).then(function (r) {
-        if (!r.ok) { $("save").disabled = false; $("e").textContent = r.message || r.error; return; }
-        toast("Saved: " + partnerName(body.partner_id) + " away " + (body.last_day === null ? "from " + longLabel(body.first_day) : longLabel(body.first_day) + (body.last_day !== body.first_day ? " to " + longLabel(body.last_day) : "")));
-        s.remove(); state.sel = null; reload();
-      }).catch(function () { $("save").disabled = false; $("e").textContent = "Could not reach HausOS."; });
-    };
-  }
-
-  function showAbsence(id) {
-    var d = state.data, a = d.absences.filter(function (x) { return String(x.id) === String(id); })[0]; if (!a) return;
-    var running = a.first_day <= d.today, finished = a.last_day !== null && a.last_day < d.today;
-    var days = a.last_day === null ? "From " + longLabel(a.first_day) + " until further notice" : (a.first_day === a.last_day ? longLabel(a.first_day) : longLabel(a.first_day) + " to " + longLabel(a.last_day) + " (back " + longLabel(addDays(a.last_day, 1)) + ")");
-    var s = sheet('<h2>' + h(a.partner_name) + '</h2><p style="margin:0 0 4px">' + h(days) + '</p>' + (a.note ? '<p style="margin:0 0 4px">' + h(a.note) + '</p>' : "") +
-      '<p class="muted">Recorded by ' + h(a.created_by) + ' on ' + h(new Date(a.created_at).toLocaleDateString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short" })) + '.</p>' +
-      '<div class="row">' + (finished ? '<span class="muted">Finished - locked.</span>' : running ? '<button class="btn no" id="act">Back early (end from today)</button>' : '<button class="btn no" id="act">Cancel this absence</button>') + '<button class="btn ghost" id="x">Close</button></div>');
-    s.querySelector("#x").onclick = s.close;
-    var b = s.querySelector("#act"); if (b) b.onclick = function () { s.remove(); act(running ? "back_early" : "cancel", a.id, running ? "End this absence from today? The days already taken stay as they are." : "Cancel this absence?"); };
-  }
-
-  function act(action, id, confirmText) {
-    if (!window.confirm(confirmText)) return;
-    call({ action: action, id: Number(id) }).then(function (r) {
-      if (!r.ok) { toast(r.message || r.error); return; }
-      toast(action === "cancel" ? "Absence cancelled." : "Ended from today.");
-      state.sel = null; reload();
-    }).catch(function () { toast("Could not reach HausOS."); });
-  }
 
   start();
 })();

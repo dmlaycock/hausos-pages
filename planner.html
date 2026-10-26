@@ -6,7 +6,10 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partner holiday planner</title>
 <!--
-  HausOS partner holiday planner v1.0.0 (26 Oct 2026)
+  HausOS partner holiday planner v1.1.0 (26 Oct 2026)
+  1.1.0: partner columns show initials at every width (same width for all); a two-click
+         range confirms with just an optional note (no date fields); Add absence kept for
+         dates beyond the grid.
   Static page served from GitHub Pages. Talks to the partner-availability Edge Function
   (JSON). Sign-in by magic link: ?t=TOKEN is exchanged for a 30-day session kept on this
   device. Days down, partners across; the last 7 days are visible but locked; today and
@@ -38,7 +41,7 @@
   .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-right:4px; }
   .wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:72vh; }
   table.grid { border-collapse:separate; border-spacing:0; width:100%; font-size:13px; }
-  .grid th .init { display:none; }
+  .grid th { font-size:13px; letter-spacing:.02em; }
   .grid th { position:sticky; top:0; background:#fff; z-index:3; border-bottom:2px solid var(--line); padding:8px 6px; text-align:center; font-weight:600; white-space:nowrap; }
   .grid th:first-child, .grid td:first-child { position:sticky; left:0; background:#fff; z-index:2; text-align:left; white-space:nowrap; min-width:92px; border-right:1px solid var(--line); }
   .grid th:first-child { z-index:4; }
@@ -73,14 +76,16 @@
   .check { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:14px; } .check input { width:auto; }
   .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#111827; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; z-index:60; }
   .signin { max-width:420px; margin:40px auto; }
-  @media (max-width:640px) { table.grid { table-layout:fixed; } .grid th .full { display:none; } .grid th .init { display:inline; } .grid th:first-child, .grid td:first-child { width:76px; min-width:76px; } .grid th { padding:8px 2px; } .grid td.abs { font-size:0; padding:0; } .grid td.abs::after { content:"\2022"; font-size:16px; } }
+  table.grid { table-layout:fixed; }
+  .grid th:first-child, .grid td:first-child { width:96px; min-width:96px; }
+  @media (max-width:640px) { .grid th:first-child, .grid td:first-child { width:76px; min-width:76px; } .grid th { padding:8px 2px; } .grid td.abs { font-size:0; padding:0; } .grid td.abs::after { content:"\2022"; font-size:16px; } }
 </style>
 </head>
 <body>
 <main>
   <div class="top">
     <div><h1>Partner holiday planner</h1><p class="sub" id="sub">Loading...</p></div>
-    <div id="topbtns" class="hidden"><button class="btn" id="addbtn">Add absence</button> <button class="btn ghost" id="outbtn">Sign out</button></div>
+    <div id="topbtns" class="hidden"><button class="btn ghost" id="addbtn">Add absence (dates beyond the grid)</button> <button class="btn ghost" id="outbtn">Sign out</button></div>
   </div>
   <div id="view"></div>
   <p class="muted" id="foot"></p>
@@ -166,9 +171,9 @@
     var d = state.data;
     topbtns.classList.remove("hidden");
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". The last 7 days are locked; today onwards can be changed.";
-    foot.textContent = "HausOS planner v1.0.0 (API v" + d.version + "). The allocation engine reads this page's data the moment a lead arrives.";
+    foot.textContent = "HausOS planner v1.1.0 (API v" + d.version + "). The allocation engine reads this page's data the moment a lead arrives.";
     var html = '<div class="card"><div class="strip"><b style="font-size:13px">Away this week:</b>' + strip() + '</div></div>';
-    html += '<div class="legend"><span><i style="background:var(--hol)"></i>Holiday</span><span><i style="background:var(--away)"></i>Away until further notice</span><span><i style="background:var(--oth)"></i>Other</span><span><i style="background:var(--locked)"></i>Locked (last 7 days)</span><span>Tap a first day, then a last day, in a partner\'s column to add an absence. Tap a block to see or change it.</span></div>';
+    html += '<div class="legend"><span><i style="background:var(--hol)"></i>Holiday</span><span><i style="background:var(--away)"></i>Away until further notice</span><span><i style="background:var(--oth)"></i>Other</span><span><i style="background:var(--locked)"></i>Locked (last 7 days)</span><span>Tap the first day, then the last day, in a partner\'s column; tap a block to see or change it.</span></div>' + '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
     html += '<div class="wrap">' + grid() + '</div>';
     html += '<p style="margin:10px 0 18px"><button class="btn ghost sm" id="more">Show further ahead</button> <span class="muted" id="range"></span></p>';
     html += '<h2 style="font-size:17px;margin:0 0 8px">Upcoming and current absences</h2><div class="list card">' + list() + '</div>';
@@ -188,7 +193,7 @@
       var a = d.absences.filter(function (x) { return x.partner_id === p.partner_id && x.first_day <= end && (x.last_day === null || x.last_day >= d.today); })
         .sort(function (x, y) { return x.first_day < y.first_day ? -1 : 1; })[0];
       if (!a) return;
-      var txt = p.display_name + ": " + (a.first_day <= d.today ? "away" : "away from " + label(a.first_day)) + (a.last_day === null ? " until further notice" : ", back " + label(addDays(a.last_day, 1)));
+      var txt = p.full_name.split(" ")[0] + ": " + (a.first_day <= d.today ? "away" : "away from " + label(a.first_day)) + (a.last_day === null ? " until further notice" : ", back " + label(addDays(a.last_day, 1)));
       out.push('<span class="chip">' + h(txt) + '</span>');
     });
     return out.length ? out.join("") : '<span class="chip none">Everyone is available</span>';
@@ -196,7 +201,7 @@
 
   function grid() {
     var d = state.data, to = visibleTo(), rows = [], lastMonth = "";
-    var head = '<tr><th>Day</th>' + d.partners.map(function (p) { return '<th title="' + h(p.full_name) + '"><span class="full">' + h(p.display_name || p.full_name) + '</span><span class="init">' + h(initials(p.full_name)) + '</span></th>'; }).join("") + '</tr>';
+    var head = '<tr><th>Day</th>' + d.partners.map(function (p) { return '<th title="' + h(p.full_name) + '">' + h(initials(p.full_name)) + '</th>'; }).join("") + '</tr>';
     for (var day = d.from; day <= to; day = addDays(day, 1)) {
       var m = monthLabel(day);
       if (m !== lastMonth) { rows.push('<tr class="month"><td colspan="' + (d.partners.length + 1) + '">' + h(m) + '</td></tr>'); lastMonth = m; }
@@ -232,7 +237,7 @@
         var p = td.dataset.p, day = td.dataset.day;
         if (!state.sel || state.sel.partner !== p) { state.sel = { partner: p, first: day }; render(); return; }
         if (day < state.sel.first) { state.sel = { partner: p, first: day }; render(); return; }
-        openAdd({ partner_id: p, first_day: state.sel.first, last_day: day });
+        quickAdd(p, state.sel.first, day);
       };
       td.onmouseenter = function () { if (state.sel && state.sel.partner === td.dataset.p && !td.dataset.id) { state.sel.hover = td.dataset.day; paintHover(); } };
     });
@@ -256,6 +261,27 @@
     s.onclick = function (e) { if (e.target === s) close(); };
     function close() { s.remove(); state.sel = null; render(); }
     document.body.appendChild(s); s.close = close; return s;
+  }
+
+  function quickAdd(partnerId, first, last) {
+    var name = partnerName(partnerId);
+    var days = first === last ? longLabel(first) : longLabel(first) + " to " + longLabel(last);
+    var s = sheet('<h2>' + h(name) + ' away</h2><p style="margin:0 0 4px;font-size:16px">' + h(days) + '</p>' +
+      '<p class="muted" style="margin:0">Back ' + h(longLabel(addDays(last, 1))) + '.</p>' +
+      '<label for="n">Note (optional)</label><input id="n" placeholder="e.g. annual leave, training">' +
+      '<p class="err" id="e"></p><div class="row"><button class="btn" id="save">Save</button><button class="btn ghost" id="x">Cancel</button></div>');
+    var $ = function (id) { return s.querySelector("#" + id); };
+    $("x").onclick = s.close;
+    $("n").focus();
+    $("n").onkeydown = function (e) { if (e.key === "Enter") $("save").click(); };
+    $("save").onclick = function () {
+      $("save").disabled = true;
+      call({ action: "add", partner_id: partnerId, first_day: first, last_day: last, note: $("n").value }).then(function (r) {
+        if (!r.ok) { $("save").disabled = false; $("e").textContent = r.message || r.error; return; }
+        toast("Saved: " + name + " away " + days);
+        s.remove(); state.sel = null; reload();
+      }).catch(function () { $("save").disabled = false; $("e").textContent = "Could not reach HausOS."; });
+    };
   }
 
   function openAdd(pre) {

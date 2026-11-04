@@ -6,7 +6,10 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partner availability</title>
 <!--
-  HausOS partner availability planner v1.2.0 (26 Oct 2026)
+  HausOS partner availability planner v1.3.0 (4 Nov 2026)
+  v1.3.0: catch-up window - while the API returns catch_up_until, the last 7 days are
+  editable (shown with a light outline and a note) so absences from before go-live reach the
+  engine's fair-share count. After that date they lock as before.
   Static page served from GitHub Pages. Talks to the partner-availability Edge Function
   (JSON). Sign-in by magic link: ?t=TOKEN is exchanged for a 30-day session kept on this
   device. Days down, partners across; the last 7 days are visible but locked.
@@ -57,6 +60,8 @@
   .grid td.abs { background:var(--away) !important; color:var(--away-ink); font-size:14px; }
   .grid td.abs::after { content:"\2022"; }
   .grid tr.locked td.abs { opacity:.55; }
+  .grid tr.catchup td { background:#fffbeb; }
+  .grid tr.catchup td:first-child { color:#92400e; }
   .grid td.busy { opacity:.5; }
   .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#111827; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; z-index:60; }
   .signin { max-width:420px; margin:40px auto; }
@@ -162,10 +167,11 @@
   function render() {
     var d = state.data;
     topbtns.classList.remove("hidden");
-    sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. The last 7 days are locked.";
-    foot.textContent = "HausOS planner v1.2.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
+    var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
+    sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
+    foot.textContent = "HausOS planner v1.3.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
-    html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked (last 7 days)</span></div>';
+    html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') + '</div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
     html += '<div class="wrap">' + grid() + '</div>';
     html += '<p style="margin:10px 0 0"><button class="btn ghost sm" id="more">Show further ahead</button> <span class="muted" id="range"></span></p>';
@@ -197,7 +203,8 @@
     for (var day = d.from; day <= to; day = addDays(day, 1)) {
       var m = monthLabel(day);
       if (m !== lastMonth) { rows.push('<tr class="month"><td colspan="' + (d.partners.length + 1) + '">' + h(m) + '</td></tr>'); lastMonth = m; }
-      var locked = day < d.today, cls = (locked ? "locked " : "") + (day === d.today ? "today " : "") + (isWeekend(day) ? "wkend" : "");
+      var editFrom = d.edit_from || d.today, locked = day < editFrom, catchup = !locked && day < d.today;
+      var cls = (locked ? "locked " : "") + (catchup ? "catchup " : "") + (day === d.today ? "today " : "") + (isWeekend(day) ? "wkend" : "");
       var cells = d.partners.map(function (p) {
         return '<td class="cell' + (isAway(p.partner_id, day) ? " abs" : "") + '" data-day="' + day + '" data-p="' + h(p.partner_id) + '" title="' + h(p.full_name + " " + longLabel(day)) + '"></td>';
       }).join("");

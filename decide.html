@@ -6,7 +6,9 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - lead allocation</title>
 <!--
-  HausOS lead allocation - decision page v1.0.0 (1 Oct 2026)
+  HausOS lead allocation - decision page v1.1.0 (5 Nov 2026)
+  v1.1.0: ?a=test asks "is this a test lead?" and posts {action:'test'} (engine v0.5.3);
+  outcome labels match the emails ("Tracy chose", "Marked as test lead").
   Static page served from GitHub Pages. Reads ?t=TOKEN&a=confirm|reject, fetches the
   proposal from the lead-allocate Edge Function (JSON) and posts the decision back.
   Nothing is written to Rex until the person presses a button on this page.
@@ -48,7 +50,7 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/lead-allocate";
   var q = new URLSearchParams(location.search);
   var token = q.get("t") || "";
-  var mode = q.get("a") === "reject" ? "reject" : "confirm";
+  var mode = q.get("a") === "reject" ? "reject" : q.get("a") === "test" ? "test" : "confirm";
   var view = document.getElementById("view"), subtitle = document.getElementById("subtitle"), title = document.getElementById("title"), foot = document.getElementById("foot");
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -77,9 +79,10 @@
     foot.textContent = "HausOS allocation engine v" + (p.engine || "") + ". Nothing is written to Rex until you press a button here.";
     if (p.state !== "pending") {
       subtitle.textContent = "";
-      var what = p.state === "confirmed" ? "Confirmed" : p.state === "rejected" ? "Overridden" : p.state === "superseded" ? "Superseded" : p.state === "expired" ? "Expired" : p.state === "error" ? "Error" : p.state;
+      var what = p.state === "confirmed" ? "Confirmed" : p.state === "rejected" ? "Tracy chose " + (p.final_partner_name || "another partner") : p.state === "test" ? "Marked as test lead" : p.state === "superseded" ? "Superseded" : p.state === "expired" ? "Expired" : p.state === "error" ? "Error" : p.state;
       var line = p.state === "expired" ? "This proposal expired after " + p.ttl_hours + " hours. Allocate the lead in Rex as usual."
         : p.state === "superseded" ? "The lead was assigned in Rex before this decision was made; nothing was changed."
+        : p.state === "test" ? "This lead is recorded as a test. It does not count in the partners' lead totals and nothing was changed in Rex."
         : p.state === "error" ? "The decision could not be applied: " + (p.error || "unknown error") + ". Please allocate in Rex manually."
         : "Decided " + when(p.decided_at) + (p.final_partner_name ? " - allocated to " + p.final_partner_name : "") + (p.override_reason ? ". Reason given: " + p.override_reason : "") + ".";
       view.innerHTML = summaryCard(p) + '<div class="outcome ' + (p.state === "error" ? "bad" : "good") + '"><h2>' + h(what) + '</h2><p style="margin:0">' + h(line) + '</p></div>';
@@ -89,9 +92,15 @@
     var html = summaryCard(p);
     if (mode === "confirm") {
       html += '<div class="row"><button class="btn ok" id="go">' + (p.kind === "contact_only" ? "Confirm - move the contact" : "Confirm - allocate to " + h(p.proposed_partner_name)) + '</button>' +
-              '<a class="btn no" href="?t=' + encodeURIComponent(token) + '&a=reject">Reject / choose someone else</a></div>';
+              '<a class="btn no" href="?t=' + encodeURIComponent(token) + '&a=reject">Reject / choose someone else</a></div>' +
+              '<p class="muted" style="margin:10px 0 0"><a href="?t=' + encodeURIComponent(token) + '&a=test">This is a test lead - ignore it</a></p>';
       view.innerHTML = html;
       document.getElementById("go").onclick = function () { submit({ token: token, action: "confirm" }, this); };
+    } else if (mode === "test") {
+      html += '<div class="card"><p style="margin:0">Mark <b>' + h(p.contact_name || "this lead") + '</b> (lead ' + h(p.lead_id) + ') as a <b>test lead</b>? It will be left out of the partners\' lead counts and the daily digest from now on, and nothing changes in Rex. Future leads from the same contact are flagged [TEST].</p></div>' +
+        '<div class="row"><button class="btn no" id="go">Yes - it is a test lead</button><a class="btn ghost" href="?t=' + encodeURIComponent(token) + '&a=confirm">Back</a></div>';
+      view.innerHTML = html;
+      document.getElementById("go").onclick = function () { submit({ token: token, action: "test" }, this); };
     } else {
       var opts = (p.pool || []).filter(function (x) { return p.kind === "contact_only" || x.id !== p.proposed_partner_id; })
         .map(function (x) { return '<option value="' + h(x.id) + '">' + h(x.name) + (x.paused ? " (paused)" : "") + '</option>'; }).join("");
@@ -115,7 +124,7 @@
   }
 
   function submit(body, btn) {
-    btn.disabled = true; btn.textContent = "Working... (writing to Rex)";
+    btn.disabled = true; btn.textContent = body.action === "test" ? "Working..." : "Working... (writing to Rex)";
     fetch(API + "?decide=1", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
       .then(function (r) {

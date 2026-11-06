@@ -6,7 +6,9 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.4.2 (6 Nov 2026)
+  HausOS partner availability planner v1.4.3 (6 Nov 2026)
+  v1.4.3: the default filter is "All leads", test leads included and greyed (David, 6 Nov);
+  "Real leads only" is the second choice.
   v1.4.2: partner initials in Engine, Outcome and Partner now (full name on hover) so the
   table fits the page (David, 6 Nov).
   v1.4.1: Leads tab tightened (David, 6 Nov): one line per lead. "What happened" shows the
@@ -222,7 +224,7 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.4.2 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
+    foot.textContent = "HausOS planner v1.4.3 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') + '</div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
@@ -337,7 +339,7 @@
     state.keep = {};
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a test lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.4.2 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
+    foot.textContent = "HausOS planner v1.4.3 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
@@ -345,13 +347,13 @@
       if (f === "engine" && (L.step === "skip" || L.is_test)) return false;
       if (f === "rel" && L.reason !== "allocated_relationship") return false;
       if (f === "skip" && L.step !== "skip") return false;
-      if (f === "all" && L.is_test && !state.keep[L.lead_id]) return false;
+      if (f === "real" && L.is_test && !state.keep[L.lead_id]) return false;
       if (f === "test" && !L.is_test && !state.keep[L.lead_id]) return false;
       if (q && ((L.contact_name || "") + " " + (L.development || "") + " " + (L.source || "") + " " + (L.engine_partner || "") + " " + (L.partner_now || "") + " " + L.lead_id).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     var html = '<div class="sum" id="sum">' + sumHtml() + '</div>';
-    html += '<div class="filters"><select id="lf"><option value="all">All real leads</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="skip">Left alone</option><option value="test">Test leads</option></select>' +
+    html += '<div class="filters"><select id="lf"><option value="all">All leads</option><option value="real">Real leads only</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="skip">Left alone</option><option value="test">Test leads</option></select>' +
             '<input id="lq" type="search" placeholder="Search name, development, partner..." value="' + h(state.lq) + '"><span class="muted">' + rows.length + ' shown</span></div>';
     html += '<div class="wrapl"><table class="leads"><thead><tr><th>When</th><th>Contact</th><th>Development</th><th>Source</th><th>What happened</th><th>Engine &rarr;</th><th>Outcome</th><th>Partner now</th><th></th></tr></thead><tbody>';
     rows.forEach(function (L) { html += rowHtml(L); });

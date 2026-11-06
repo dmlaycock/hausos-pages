@@ -6,7 +6,12 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.7.1 (6 Nov 2026)
+  HausOS partner availability planner v1.7.2 (6 Nov 2026)
+  v1.7.2 (David, 6 Nov): the Outcome cell says who made the decision for test / not-a-lead marks
+  and for reallocations ("Tracy chose") - the planner user's initials, "email" for a decision
+  made from the email links, "engine" for the automatic not-a-lead rule, "call" for a direct
+  call. Full wording on hover. Leads the engine excluded itself (portal datafeed-error emails)
+  show the tag "Not a lead" instead of "Left alone".
   v1.7.1 (David, 6 Nov): the sequence is now a projection of the engine's rule, not the current
   standings. The page replays the engine's own choice (lowest leads per available day, floor 2;
   tie -> longest since last lead; then name) lead by lead, giving each lead to the winner and
@@ -147,6 +152,8 @@
   .leads th { text-align:left; padding:8px 6px; border-bottom:2px solid var(--line); font-weight:600; white-space:nowrap; position:sticky; top:0; background:#fff; z-index:2; }
   .leads td { padding:6px 6px; border-bottom:1px solid #f1f5f9; vertical-align:middle; white-space:nowrap; max-width:260px; overflow:hidden; text-overflow:ellipsis; }
   .leads td.o { white-space:nowrap; } .leads .ico { display:inline-block; width:16px; text-align:center; margin-right:3px; font-weight:700; }
+  .leads .who { display:inline-block; font-size:10px; font-weight:600; letter-spacing:.03em; padding:0 5px; border-radius:999px; background:#e5e7eb; color:#374151; margin-left:4px; vertical-align:1px; }
+  .leads tr.test .who, .leads tr.notlead .who { background:#e5e7eb; color:#6b7280; }
   .leads .ico.ok { color:var(--ok); } .leads .ico.wait { color:#b45309; } .leads .ico.no { color:var(--no); } .leads .ico.dim { color:#9ca3af; }
   .leads td[title], .leads .tag[title] { cursor:help; }
   .leads td.when { white-space:nowrap; color:var(--muted); }
@@ -303,7 +310,7 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.7.1 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
+    foot.textContent = "HausOS planner v1.7.2 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') +
             '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>2nd, 4th... = which lead they get next if nothing changes (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away today</span></div>';
@@ -429,6 +436,7 @@
   // ---- Leads tab (v1.4.0)
   function whenLabel(iso) { try { return new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); } catch (e) { return iso; } }
   function routeTag(L) {
+    if (L.reason === "skipped_not_a_lead") return '<span class="tag test">Not a lead</span>';
     if (L.step === "skip") return '<span class="tag skip">Left alone</span>';
     if (L.reason === "allocated_relationship") return '<span class="tag rel">Existing owner</span>';
     if (L.reason === "allocated_directed") return '<span class="tag dir">Directed</span>';
@@ -437,19 +445,40 @@
     return '<span class="tag">Fair share</span>';
   }
   // Outcome as an icon and a word; outcomeText() stays the full wording, shown on hover.
+  // Who made the decision (v1.7.2): a person's initials, or email / engine / call.
+  function whoShort(L) {
+    var w = L.decided_by_label; if (!w) return "";
+    if (/^email/i.test(w)) return "email";
+    if (/^engine/i.test(w)) return "engine";
+    if (/^direct call/i.test(w)) return "call";
+    if (/^recorded by David/i.test(w)) return "DL";
+    if (/^test contact/i.test(w)) return "test contact";
+    return initials(w);
+  }
+  function whoLong(L) {
+    var w = L.decided_by_label; if (!w) return "";
+    if (/^email/i.test(w)) return "decided from the email link (Tracy or Jamie)";
+    if (/^engine \(auto rule\)/i.test(w)) return "excluded automatically by the engine (portal system notice)";
+    if (/^engine/i.test(w)) return "allocated automatically by the engine";
+    if (/^direct call/i.test(w)) return "allocated by a direct call to the engine";
+    if (/^test contact/i.test(w)) return "the contact is a standing test contact";
+    return "by " + w;
+  }
   function outcomeHtml(L) {
     var full = outcomeText(L), st = L.state, ico, cls, word;
+    var who = whoShort(L), whoTag = who ? ' <span class="who">' + h(who) + '</span>' : "";
     if (L.exclusion === "not_a_lead" || st === "not_lead") { ico = "\u2715"; cls = "dim"; word = "Not a lead"; }
     else if (L.is_test || st === "test") { ico = "\u2715"; cls = "dim"; word = "Test"; }
     else if (!st) { ico = "\u2013"; cls = "dim"; word = L.step === "skip" ? "Left alone" : "Nothing"; }
     else if (st === "confirmed") { ico = "\u2713"; cls = "ok"; word = L.decided_by === "auto" ? "Auto" : L.decided_by === "override_call" ? "Directed" : "Tracy"; }
-    else if (st === "rejected") { ico = "\u21B7"; cls = "wait"; word = "Tracy: " + initials(L.override_partner || L.final_partner || "-"); }
+    else if (st === "rejected") { ico = "\u21B7"; cls = "wait"; word = "Chose " + initials(L.override_partner || L.final_partner || "-"); }
     else if (st === "expired") { ico = "\u23F1"; cls = "no"; word = "Expired"; }
     else if (st === "superseded") { ico = "\u21B7"; cls = "dim"; word = "In Rex"; }
     else if (st === "pending") { ico = "\u23F3"; cls = "wait"; word = "Pending"; }
     else if (st === "error") { ico = "\u26A0"; cls = "no"; word = "Error"; }
     else { ico = "\u2022"; cls = "dim"; word = st; }
-    return { html: '<span class="ico ' + cls + '">' + ico + '</span>' + h(word), full: full };
+    var showWho = (L.exclusion || st === "test" || st === "not_lead" || st === "rejected") && who;
+    return { html: '<span class="ico ' + cls + '">' + ico + '</span>' + h(word) + (showWho ? whoTag : ""), full: full + (showWho ? " - " + whoLong(L) : "") };
   }
   function outcomeText(L) {
     var st = L.state;
@@ -457,7 +486,7 @@
     if (L.is_test) return "Test lead - not counted";
     if (!st) return L.step === "skip" ? "Not handled by the engine" : (L.reason === "human_direct" ? "Nothing to do" : "-");
     if (st === "confirmed") return L.decided_by === "auto" ? "Allocated automatically" : L.decided_by === "override_call" ? "Allocated (directed)" : "Confirmed by Tracy";
-    if (st === "rejected") return "Tracy chose " + (L.override_partner || L.final_partner || "-") + (L.override_reason ? ' - "' + L.override_reason + '"' : "");
+    if (st === "rejected") return "Engine proposed " + (L.engine_partner || "-") + "; " + (L.override_partner || L.final_partner || "-") + " chosen instead" + (L.override_reason ? ' - "' + L.override_reason + '"' : "");
     if (st === "expired") return "Expired - no decision in 48 h";
     if (st === "superseded") return "Assigned in Rex before a decision";
     if (st === "pending") return "Awaiting Tracy's decision";
@@ -511,7 +540,7 @@
     state.keep = {};
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.7.1 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day; everything else is live at the last refresh.";
+    foot.textContent = "HausOS planner v1.7.2 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day; everything else is live at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
@@ -552,6 +581,7 @@
       call(body).then(function (r) {
         if (!r.ok) { td.innerHTML = before; toast(r.message || r.error || "Not saved"); if (r._status === 401) signedOut(); return; }
         L.is_test = !!r.is_test; L.exclusion = r.exclusion || null;
+        L.decided_by_label = L.exclusion ? (state.data.user.name || state.data.user.email) : null;   // v1.7.2: shown in Outcome
         if (L.state === "pending" && L.exclusion) L.state = L.exclusion === "not_a_lead" ? "not_lead" : "test";
         state.keep[id] = true; state.counts = null;   // the Planner tab reloads the engine's counts next time it is shown
         var tr = wrap.querySelector('tr[data-id="' + id + '"]');

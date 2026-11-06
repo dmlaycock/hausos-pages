@@ -6,7 +6,10 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.7.2 (6 Nov 2026)
+  HausOS partner availability planner v1.7.3 (6 Nov 2026)
+  v1.7.3 (David, 6 Nov): wording only - "Partner now" is now the assignee at the engine's last Rex
+  pull (ops.lead_report v1.4), falling back to the warehouse, so the Leads tab agrees with the
+  Planner tab's counts within the same refresh. Hover on the cell shows the as-at time.
   v1.7.2 (David, 6 Nov): the Outcome cell says who made the decision for test / not-a-lead marks
   and for reallocations ("Tracy chose") - the planner user's initials, "email" for a decision
   made from the email links, "engine" for the automatic not-a-lead rule, "call" for a direct
@@ -310,7 +313,7 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.7.2 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
+    foot.textContent = "HausOS planner v1.7.3 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') +
             '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>2nd, 4th... = which lead they get next if nothing changes (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away today</span></div>';
@@ -512,7 +515,8 @@
   function rowHtml(L) {
     var x = excl(L);
     var cls = (x === "not_a_lead" ? "notlead " : x ? "test " : L.moved ? "moved " : "") + (L.step === "skip" ? "skip" : ""), oc = outcomeHtml(L);
-    var nowTitle = L.moved ? "Moved: first with " + (L.partner_first || "-") + ", now with " + (L.partner_now || "-") + (L.engine_partner && L.step !== "skip" ? " (engine proposed " + L.engine_partner + ")" : "") : (L.partner_now || "");
+    var asAt = ""; try { asAt = L.partner_now_as_at ? " (as at " + new Date(L.partner_now_as_at).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ")" : ""; } catch (e) {}
+    var nowTitle = (L.moved ? "Moved: first with " + (L.partner_first || "-") + ", now with " + (L.partner_now || "-") + (L.engine_partner && L.step !== "skip" ? " (engine proposed " + L.engine_partner + ")" : "") : (L.partner_now || "")) + asAt;
     return '<tr class="' + cls.trim() + '" data-id="' + h(L.lead_id) + '">' +
       '<td class="when" data-l="When">' + h(whenLabel(L.received_at)) + '</td>' +
       '<td class="c" data-l="Contact" title="' + h(L.contact_name || "") + '"><a href="' + h(L.rex_url) + '" target="_blank" rel="noopener">' + h(L.contact_name || ("lead " + L.lead_id)) + '</a></td>' +
@@ -539,8 +543,8 @@
     var d = state.data;
     state.keep = {};
     topbtns.classList.remove("hidden");
-    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.7.2 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day; everything else is live at the last refresh.";
+    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and who has it now (as at the engine's last Rex pull). Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest.";
+    foot.textContent = "HausOS planner v1.7.3 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {

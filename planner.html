@@ -4,9 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>HausOS - partner availability</title>
+<title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.3.0 (4 Nov 2026)
+  HausOS partner availability planner v1.4.0 (6 Nov 2026)
+  v1.4.0: second tab "Leads" (David, 6 Nov) - every lead the engine received in the last 14
+  days (API leads -> ops.lead_report): when, contact, development, source, what the engine
+  did and why (fair share / existing contact owner / directed / left to Ed etc.), the outcome,
+  who has it now, and a one-click Mark as test / Undo that keeps ops.test_records so the lead
+  drops out of fair share, the record and the digest. Tabs remembered per device.
   v1.3.0: catch-up window - while the API returns catch_up_until, the last 7 days are
   editable (shown with a light outline and a note) so absences from before go-live reach the
   engine's fair-share count. After that date they lock as before.
@@ -65,15 +70,44 @@
   .grid td.busy { opacity:.5; }
   .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#111827; color:#fff; padding:10px 16px; border-radius:8px; font-size:14px; z-index:60; }
   .signin { max-width:420px; margin:40px auto; }
+  .tabs { display:flex; gap:6px; margin:0 0 12px; border-bottom:1px solid var(--line); }
+  .tab { background:none; border:0; border-bottom:3px solid transparent; padding:8px 12px; font:inherit; font-weight:600; color:var(--muted); cursor:pointer; margin-bottom:-1px; }
+  .tab.on { color:var(--ink); border-bottom-color:var(--ok); }
+  .filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0 0 10px; }
+  .filters select, .filters input { width:auto; padding:7px 9px; font-size:14px; }
+  .sum { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:0 0 10px; }
+  .sum b { color:var(--ink); }
+  table.leads { border-collapse:collapse; width:100%; font-size:13px; }
+  .leads th { text-align:left; padding:8px 6px; border-bottom:2px solid var(--line); font-weight:600; white-space:nowrap; position:sticky; top:0; background:#fff; z-index:2; }
+  .leads td { padding:7px 6px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  .leads td.when { white-space:nowrap; color:var(--muted); }
+  .leads tr.test td { color:#9ca3af; } .leads tr.test td.c { text-decoration:line-through; }
+  .leads tr.skip td { color:#6b7280; }
+  .leads .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:999px; background:#eef2ff; color:#3730a3; white-space:nowrap; }
+  .leads .tag.rel { background:#fef3c7; color:#92400e; } .leads .tag.skip { background:#f3f4f6; color:#6b7280; } .leads .tag.dir { background:#ecfeff; color:#155e75; } .leads .tag.test { background:#fee2e2; color:#991b1b; }
+  .leads a { color:#1a56db; }
+  .tbtn { font:inherit; font-size:12px; padding:4px 8px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; white-space:nowrap; }
+  .tbtn.on { background:#fee2e2; border-color:#fecaca; color:#991b1b; }
+  .wrapl { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:72vh; }
+  @media (max-width:760px) {
+    table.leads, .leads thead, .leads tbody, .leads tr, .leads td { display:block; }
+    .leads thead { display:none; }
+    .leads tr { border-bottom:1px solid var(--line); padding:8px 10px; }
+    .leads td { border:0; padding:2px 0; }
+    .leads td::before { content:attr(data-l) ": "; color:var(--muted); font-size:12px; }
+    .leads td.c::before, .leads td.when::before, .leads td.act::before { content:""; }
+    .leads td.c { font-weight:600; font-size:14px; }
+  }
   @media (max-width:640px) { .grid th:first-child, .grid td:first-child { width:76px; min-width:76px; } .grid th { padding:8px 2px; } }
 </style>
 </head>
 <body>
 <main>
   <div class="top">
-    <div><h1>Partner availability</h1><p class="sub" id="sub">Loading...</p></div>
+    <div><h1>Partners and leads</h1><p class="sub" id="sub">Loading...</p></div>
     <div id="topbtns" class="hidden"><button class="btn ghost sm" id="outbtn">Sign out</button></div>
   </div>
+  <div class="tabs hidden" id="tabs"><button class="tab on" data-tab="planner">Planner</button><button class="tab" data-tab="leads">Leads (last 14 days)</button></div>
   <div id="view"></div>
   <p class="muted" id="foot"></p>
 </main>
@@ -83,7 +117,8 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/partner-availability";
   var SHOW_WEEKS = 8, STEP_WEEKS = 8;
   var view = document.getElementById("view"), sub = document.getElementById("sub"), foot = document.getElementById("foot"), topbtns = document.getElementById("topbtns");
-  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {} };   // away["partner|day"] = true
+  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "" };   // away["partner|day"] = true
+  var tabs = document.getElementById("tabs");
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
@@ -111,7 +146,7 @@
   function reload() {
     return call({ action: "list" }).then(function (r) {
       if (!r.ok) { if (r._status === 401) { signedOut(); return; } throw new Error(r.message || r.error); }
-      state.data = r; indexAway(); render();
+      state.data = r; indexAway(); tabs.classList.remove("hidden"); show();
     }).catch(function (e) { sub.textContent = ""; view.innerHTML = '<div class="card"><b>Could not load the planner.</b><p class="muted">' + h(e.message || e) + '</p><p><button class="btn ghost" onclick="location.reload()">Try again</button></p></div>'; });
   }
   // Expand absence rows (any length) into a set of partner|day keys for the visible range.
@@ -128,7 +163,7 @@
   // ---- sign in
   function signedOut() {
     state.session = null; store("hausos_planner_session", null);
-    topbtns.classList.add("hidden"); sub.textContent = "Sign in to see and change partner availability."; foot.textContent = "";
+    topbtns.classList.add("hidden"); tabs.classList.add("hidden"); sub.textContent = "Sign in to see and change partner availability."; foot.textContent = "";
     view.innerHTML = '<div class="card signin"><label for="email">Your email address</label><input id="email" type="email" autocomplete="email" placeholder="name@hausproperties.com">' +
       '<p class="err" id="err"></p><p><button class="btn" id="go">Email me a sign-in link</button></p>' +
       '<p class="muted">The link works once and expires in 30 minutes. After that you stay signed in on this device for 30 days.</p></div>';
@@ -163,13 +198,21 @@
     reload();
   }
 
+  // ---- tabs
+  function show() {
+    tabs.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === state.tab); });
+    store("hausos_planner_tab", state.tab);
+    if (state.tab === "leads") renderLeads(); else render();
+  }
+  tabs.querySelectorAll(".tab").forEach(function (b) { b.onclick = function () { state.tab = b.dataset.tab; history.replaceState(null, "", location.pathname + (state.tab === "leads" ? "#leads" : "")); show(); }; });
+
   // ---- render
   function render() {
     var d = state.data;
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.3.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
+    foot.textContent = "HausOS planner v1.4.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') + '</div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
@@ -211,6 +254,96 @@
       rows.push('<tr class="' + cls.trim() + '"><td class="day">' + h(label(day)) + '</td>' + cells + '</tr>');
     }
     return '<table class="grid">' + head + rows.join("") + '</table>';
+  }
+
+  // ---- Leads tab (v1.4.0)
+  function whenLabel(iso) { try { return new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); } catch (e) { return iso; } }
+  function routeTag(L) {
+    if (L.step === "skip") return '<span class="tag skip">Left alone</span>';
+    if (L.reason === "allocated_relationship") return '<span class="tag rel">Existing owner</span>';
+    if (L.reason === "allocated_directed") return '<span class="tag dir">Directed</span>';
+    if (L.reason === "human_direct") return '<span class="tag skip">Haus user</span>';
+    if (L.reason === "fallback_no_eligible_partner") return '<span class="tag rel">Nobody available</span>';
+    return '<span class="tag">Fair share</span>';
+  }
+  function outcomeText(L) {
+    var st = L.state;
+    if (L.is_test) return "Test lead - not counted";
+    if (!st) return L.step === "skip" ? "Not handled by the engine" : (L.reason === "human_direct" ? "Nothing to do" : "-");
+    if (st === "confirmed") return L.decided_by === "auto" ? "Allocated automatically" : L.decided_by === "override_call" ? "Allocated (directed)" : "Confirmed by Tracy";
+    if (st === "rejected") return "Tracy chose " + (L.override_partner || L.final_partner || "-") + (L.override_reason ? ' - "' + L.override_reason + '"' : "");
+    if (st === "expired") return "Expired - no decision in 48 h";
+    if (st === "superseded") return "Assigned in Rex before a decision";
+    if (st === "pending") return "Awaiting Tracy's decision";
+    if (st === "test") return "Test lead - not counted";
+    if (st === "error") return "Error - allocate in Rex";
+    return st;
+  }
+  function loadLeads() {
+    return call({ action: "leads", days: 14 }).then(function (r) {
+      if (!r.ok) { if (r._status === 401) { signedOut(); return; } throw new Error(r.message || r.error); }
+      state.leads = r.leads; renderLeads();
+    }).catch(function (e) { view.innerHTML = '<div class="card"><b>Could not load the leads.</b><p class="muted">' + h(e.message || e) + '</p></div>'; });
+  }
+  function renderLeads() {
+    var d = state.data;
+    topbtns.classList.remove("hidden");
+    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a test lead and it drops out of the partners' lead counts, the record and the daily digest.";
+    foot.textContent = "HausOS planner v1.4.0 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
+    if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
+    var all = state.leads, q = state.lq.toLowerCase();
+    var n = { total: 0, engine: 0, fair: 0, rel: 0, dir: 0, skip: 0, test: 0 };
+    all.forEach(function (L) {
+      if (L.is_test) { n.test++; return; }
+      n.total++;
+      if (L.step === "skip") n.skip++; else { n.engine++; if (L.reason === "allocated_relationship") n.rel++; else if (L.reason === "allocated_directed") n.dir++; else if (L.reason === "allocated_rate" || L.reason === "allocated_rate_identity_conflict") n.fair++; }
+    });
+    var rows = all.filter(function (L) {
+      var f = state.lf;
+      if (f === "engine" && (L.step === "skip" || L.is_test)) return false;
+      if (f === "rel" && L.reason !== "allocated_relationship") return false;
+      if (f === "skip" && L.step !== "skip") return false;
+      if (f === "test" && !L.is_test) return false;
+      if (f === "all" && L.is_test) return false;
+      if (q && ((L.contact_name || "") + " " + (L.development || "") + " " + (L.source || "") + " " + (L.engine_partner || "") + " " + (L.partner_now || "") + " " + L.lead_id).toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    });
+    var html = '<div class="sum"><span><b>' + n.total + '</b> leads</span><span><b>' + n.engine + '</b> handled by the engine (' + n.fair + ' fair share, ' + n.rel + ' existing owner, ' + n.dir + ' directed)</span><span><b>' + n.skip + '</b> left alone (Ed, MoneyPenny, Haus users)</span><span><b>' + n.test + '</b> test</span></div>';
+    html += '<div class="filters"><select id="lf"><option value="all">All real leads</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="skip">Left alone</option><option value="test">Test leads</option></select>' +
+            '<input id="lq" type="search" placeholder="Search name, development, partner..." value="' + h(state.lq) + '"><span class="muted">' + rows.length + ' shown</span></div>';
+    html += '<div class="wrapl"><table class="leads"><thead><tr><th>When</th><th>Contact</th><th>Development</th><th>Source</th><th>What happened</th><th>Engine &rarr;</th><th>Outcome</th><th>Partner now</th><th></th></tr></thead><tbody>';
+    rows.forEach(function (L) {
+      var cls = (L.is_test ? "test " : "") + (L.step === "skip" ? "skip" : "");
+      html += '<tr class="' + cls.trim() + '" data-id="' + h(L.lead_id) + '">' +
+        '<td class="when" data-l="When">' + h(whenLabel(L.received_at)) + '</td>' +
+        '<td class="c" data-l="Contact"><a href="' + h(L.rex_url) + '" target="_blank" rel="noopener">' + h(L.contact_name || ("lead " + L.lead_id)) + '</a></td>' +
+        '<td data-l="Development">' + h(L.development || "-") + '</td>' +
+        '<td data-l="Source">' + h(L.source || "-") + '</td>' +
+        '<td data-l="What happened">' + routeTag(L) + ' <span class="muted">' + h(L.route) + '</span></td>' +
+        '<td data-l="Engine">' + h(L.step === "skip" ? "-" : (L.engine_partner || "-")) + '</td>' +
+        '<td data-l="Outcome">' + h(outcomeText(L)) + '</td>' +
+        '<td data-l="Partner now">' + h(L.partner_now || "-") + '</td>' +
+        '<td class="act"><button class="tbtn' + (L.is_test ? " on" : "") + '" data-id="' + h(L.lead_id) + '">' + (L.is_test ? "Test - undo" : "Mark as test") + '</button></td></tr>';
+    });
+    html += '</tbody></table></div>';
+    if (!rows.length) html += '<p class="muted">Nothing matches.</p>';
+    view.innerHTML = html;
+    document.getElementById("lf").value = state.lf;
+    document.getElementById("lf").onchange = function () { state.lf = this.value; renderLeads(); };
+    var lq = document.getElementById("lq"); lq.oninput = function () { state.lq = this.value; renderLeads(); var e = document.getElementById("lq"); e.focus(); e.setSelectionRange(e.value.length, e.value.length); };
+    document.querySelectorAll(".tbtn").forEach(function (b) {
+      b.onclick = function () {
+        var id = b.dataset.id, L = state.leads.filter(function (x) { return x.lead_id === id; })[0]; if (!L) return;
+        b.disabled = true;
+        call({ action: L.is_test ? "unmark_test" : "mark_test", lead_id: id }).then(function (r) {
+          b.disabled = false;
+          if (!r.ok) { toast(r.message || r.error || "Not saved"); if (r._status === 401) signedOut(); return; }
+          L.is_test = !!r.is_test; if (L.is_test && L.state === "pending") L.state = "test";
+          toast(L.is_test ? "Marked as a test lead - no longer counted" : "Back in the counts");
+          renderLeads();
+        }).catch(function () { b.disabled = false; toast("Could not reach HausOS - not saved"); });
+      };
+    });
   }
 
   // ---- one click = toggle (optimistic; reverts if the API says no)

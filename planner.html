@@ -6,7 +6,19 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.5.0 (6 Nov 2026)
+  HausOS partner availability planner v1.6.0 (6 Nov 2026)
+  v1.6.0 (David, 6 Nov): (a) "Not a lead" on the Leads tab beside "Test" - spam, suppliers, not a
+  buyer; the lead drops out of fair share, the record and the digest but the contact is left
+  alone (API mark_test kind not_a_lead). Each row carries one undo button for whichever mark
+  it has. (b) Row highlighting: grey background for test and not-a-lead rows; pale orange for
+  leads moved from their original partner at any stage or allocated differently from the
+  engine's recommendation (API moved, from ops.lead_report v1.2). (c) "Refreshed HH:MM" and a
+  Refresh button at the top of both tabs; the page also refreshes itself when the tab comes
+  back into view after 10 minutes. Marking a lead clears the cached counts so the Planner tab
+  reloads them. (d) Who is due the next lead is unmissable: that partner's column header is
+  solid green with NEXT under the initials; the rest of the available partners are shaded in
+  blue by the engine's own order (darkest = second), with 2nd, 3rd... under the initials;
+  partners away today are grey. The order is the engine's ranking at the last refresh.
   v1.5.0: lead counts on the Planner tab (David, 6 Nov). Each past-day and today cell shows how
   many leads that partner received that day; two header rows show L7D (leads in the last 7
   days) and per day (L7D / days available, floor 2 - the rate the engine ranks on). Numbers
@@ -88,6 +100,18 @@
   .grid tr.stat2 th { top:56px; font-weight:400; font-size:11px; color:var(--muted); padding:2px 4px 5px; border-bottom:2px solid var(--line); background:#f9fafb; }
   .grid tr.stat th:first-child, .grid tr.stat2 th:first-child { text-align:left; font-weight:600; color:var(--muted); font-size:11px; }
   .grid tr.stat th.lo { color:var(--ok); }
+  /* v1.6.0: who gets the next lead (column header block: initials, L7D, per day) */
+  .grid th small { display:block; font-size:10px; font-weight:700; letter-spacing:.06em; line-height:1.2; margin-top:2px; min-height:12px; }
+  .grid tr.head th { vertical-align:middle; }
+  .grid th.seq-1, .grid tr.stat th.seq-1, .grid tr.stat2 th.seq-1 { background:var(--ok); color:#fff; }
+  .grid th.seq-2, .grid tr.stat th.seq-2, .grid tr.stat2 th.seq-2 { background:#1d4ed8; color:#fff; }
+  .grid th.seq-3, .grid tr.stat th.seq-3, .grid tr.stat2 th.seq-3 { background:#3b82f6; color:#fff; }
+  .grid th.seq-4, .grid tr.stat th.seq-4, .grid tr.stat2 th.seq-4 { background:#93c5fd; color:#1e3a8a; }
+  .grid th.seq-5, .grid tr.stat th.seq-5, .grid tr.stat2 th.seq-5 { background:#bfdbfe; color:#1e3a8a; }
+  .grid th.seq-6, .grid tr.stat th.seq-6, .grid tr.stat2 th.seq-6, .grid th.seq-7, .grid tr.stat th.seq-7, .grid tr.stat2 th.seq-7 { background:#dbeafe; color:#1e3a8a; }
+  .grid th.seq-away, .grid tr.stat th.seq-away, .grid tr.stat2 th.seq-away { background:#e5e7eb; color:#6b7280; }
+  .grid th.seq-1 { font-size:15px; }
+  .grid tr.stat th.seq-1 { font-size:14px; }
   .grid tr.locked td.abs { opacity:.55; }
   .grid tr.catchup td { background:#fffbeb; }
   .grid tr.catchup td:first-child { color:#92400e; }
@@ -109,7 +133,9 @@
   .leads .ico.ok { color:var(--ok); } .leads .ico.wait { color:#b45309; } .leads .ico.no { color:var(--no); } .leads .ico.dim { color:#9ca3af; }
   .leads td[title], .leads .tag[title] { cursor:help; }
   .leads td.when { white-space:nowrap; color:var(--muted); }
-  .leads tr.test td { color:#9ca3af; } .leads tr.test td.c { text-decoration:line-through; }
+  .leads tr.moved td { background:#ffedd5; }
+  .leads tr.test td, .leads tr.notlead td { background:#f3f4f6; color:#9ca3af; } .leads tr.test td.c, .leads tr.notlead td.c { text-decoration:line-through; }
+  .leads td.act { white-space:nowrap; } .leads td.act .tbtn + .tbtn { margin-left:4px; }
   .leads tr.skip td { color:#6b7280; }
   .leads .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:999px; background:#eef2ff; color:#3730a3; white-space:nowrap; }
   .leads .tag.rel { background:#fef3c7; color:#92400e; } .leads .tag.skip { background:#f3f4f6; color:#6b7280; } .leads .tag.dir { background:#ecfeff; color:#155e75; } .leads .tag.test { background:#fee2e2; color:#991b1b; }
@@ -121,6 +147,7 @@
     table.leads, .leads thead, .leads tbody, .leads tr, .leads td { display:block; }
     .leads thead { display:none; }
     .leads tr { border-bottom:1px solid var(--line); padding:8px 10px; }
+    .leads tr.moved, .leads tr.test, .leads tr.notlead { border-radius:6px; }
     .leads td { border:0; padding:2px 0; white-space:normal; max-width:none; }
     .leads td::before { content:attr(data-l) ": "; color:var(--muted); font-size:12px; }
     .leads td.c::before, .leads td.when::before, .leads td.act::before { content:""; }
@@ -133,7 +160,7 @@
 <main>
   <div class="top">
     <div><h1>Partners and leads</h1><p class="sub" id="sub">Loading...</p></div>
-    <div id="topbtns" class="hidden"><button class="btn ghost sm" id="outbtn">Sign out</button></div>
+    <div id="topbtns" class="hidden"><span class="muted" id="refreshed"></span> <button class="btn ghost sm" id="refbtn">Refresh</button> <button class="btn ghost sm" id="outbtn">Sign out</button></div>
   </div>
   <div class="tabs hidden" id="tabs"><button class="tab on" data-tab="planner">Planner</button><button class="tab" data-tab="leads">Leads (last 14 days)</button></div>
   <div id="view"></div>
@@ -145,7 +172,7 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/partner-availability";
   var SHOW_WEEKS = 8, STEP_WEEKS = 8;
   var view = document.getElementById("view"), sub = document.getElementById("sub"), foot = document.getElementById("foot"), topbtns = document.getElementById("topbtns");
-  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {}, counts: null };   // away["partner|day"] = true; keep[lead_id] = row toggled since the last full render (stays visible)
+  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {}, counts: null, refreshed: null };   // away["partner|day"] = true; keep[lead_id] = row toggled since the last full render (stays visible)
   var tabs = document.getElementById("tabs");
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -174,7 +201,7 @@
   function reload() {
     return call({ action: "list" }).then(function (r) {
       if (!r.ok) { if (r._status === 401) { signedOut(); return; } throw new Error(r.message || r.error); }
-      state.data = r; indexAway(); tabs.classList.remove("hidden"); show();
+      state.data = r; indexAway(); tabs.classList.remove("hidden"); stamp(); show();
     }).catch(function (e) { sub.textContent = ""; view.innerHTML = '<div class="card"><b>Could not load the planner.</b><p class="muted">' + h(e.message || e) + '</p><p><button class="btn ghost" onclick="location.reload()">Try again</button></p></div>'; });
   }
   // Expand absence rows (any length) into a set of partner|day keys for the visible range.
@@ -187,6 +214,24 @@
     state.away = map;
   }
   function isAway(p, day) { return !!state.away[p + "|" + day]; }
+
+  // ---- refresh (v1.6.0): one button reloads the planner, the counts and the leads; the time shown is the last successful load.
+  var refbtn = document.getElementById("refbtn"), refreshedEl = document.getElementById("refreshed");
+  function stamp() {
+    state.refreshed = Date.now();
+    try { refreshedEl.textContent = "Refreshed " + new Date().toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }); } catch (e) { refreshedEl.textContent = ""; }
+    refbtn.disabled = false; refbtn.textContent = "Refresh";
+  }
+  function refreshAll() {
+    if (!state.session) return;
+    refbtn.disabled = true; refbtn.textContent = "Refreshing...";
+    state.counts = null; state.leads = null;
+    reload();
+  }
+  refbtn.onclick = refreshAll;
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && state.session && state.refreshed && Date.now() - state.refreshed > 10 * 60000) refreshAll();
+  });
 
   // ---- sign in
   function signedOut() {
@@ -241,16 +286,17 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.5.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts.";
+    foot.textContent = "HausOS planner v1.6.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts at the last refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
-    html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') + '</div>';
+    html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') +
+            '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>then in this order (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away today</span></div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
     html += '<div class="wrap">' + grid() + '</div>';
     html += '<p style="margin:10px 0 0"><button class="btn ghost sm" id="more">Show further ahead</button> <span class="muted" id="range"></span></p>';
     view.innerHTML = html;
     document.getElementById("range").textContent = "Showing " + longLabel(d.from) + " to " + longLabel(visibleTo()) + ".";
     document.getElementById("more").onclick = function () { state.showWeeks += STEP_WEEKS; render(); };
-    bind();
+    bind(); alignHeads();
     if (state.counts) fillCounts(); else loadCounts();
     var today = document.querySelector("tr.today"), wrap = document.querySelector(".wrap"); if (today && wrap) wrap.scrollTop = Math.max(0, today.offsetTop - wrap.clientHeight / 3);
   }
@@ -259,25 +305,42 @@
   function loadCounts() {
     call({ action: "counts" }).then(function (r) {
       if (!r.ok) { if (r._status === 401) { signedOut(); return; } markCountsFailed(r.message || r.error); return; }
-      state.counts = r; if (state.tab === "planner") fillCounts();
+      state.counts = r; stamp(); if (state.tab === "planner") fillCounts();
     }).catch(function () { markCountsFailed("engine not reachable"); });
   }
   function markCountsFailed(msg) {
     document.querySelectorAll("th.st-n").forEach(function (th) { th.textContent = "-"; th.title = "Lead counts unavailable: " + msg; });
+    document.querySelectorAll("th.st-p small").forEach(function (sm) { sm.textContent = ""; });
   }
   function fillCounts() {
     var c = state.counts; if (!c) return;
     var byP = {}; c.partners.forEach(function (p) { byP[p.partner_id] = p; });
     var days = c.days || [];
-    var best = null; c.partners.forEach(function (p) { if (p.available && (best === null || p.rate < best)) best = p.rate; });
-    document.querySelectorAll("th.st-n").forEach(function (th) { var p = byP[th.dataset.p]; th.textContent = p ? String(p.n) : "-"; th.title = p ? p.name + ": " + p.n + " lead" + (p.n === 1 ? "" : "s") + " in the last 7 days, " + p.days_available + " day" + (p.days_available === 1 ? "" : "s") + " available" + (p.pending ? " (" + p.pending + " awaiting a decision)" : "") : ""; th.classList.toggle("lo", !!p && p.available && p.rate === best); });
-    document.querySelectorAll("th.st-r").forEach(function (th) { var p = byP[th.dataset.p]; th.textContent = p ? Number(p.rate).toFixed(2) : ""; th.title = p ? p.name + ": " + p.n + " / max(" + p.days_available + ", " + (c.day_floor || 2) + ")" : ""; });
+    // Sequence: the engine's ranking order (lowest rate first, tie-break longest since last lead), available partners only.
+    var seq = {}, k = 0; c.partners.forEach(function (p) { if (p.available) seq[p.partner_id] = ++k; });
+    var ord = ["", "NEXT", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"];
+    function seqClass(th) { var p = byP[th.dataset.p]; th.className = th.className.replace(/\bseq-\S+/g, "").trim(); if (!p) return; th.classList.add(p.available ? "seq-" + Math.min(seq[p.partner_id], 7) : "seq-away"); }
+    document.querySelectorAll("th.st-p").forEach(function (th) {
+      var p = byP[th.dataset.p], sm = th.querySelector("small"); seqClass(th);
+      if (sm) sm.textContent = p ? (p.available ? ord[seq[p.partner_id]] || "" : "away") : "";
+      th.title = p ? p.name + (p.available ? (seq[p.partner_id] === 1 ? " - due the next lead" : " - " + ord[seq[p.partner_id]] + " in line") : " - away today, not in the running") : th.title;
+    });
+    document.querySelectorAll("th.st-n").forEach(function (th) { var p = byP[th.dataset.p]; seqClass(th); th.textContent = p ? String(p.n) : "-"; th.title = p ? p.name + ": " + p.n + " lead" + (p.n === 1 ? "" : "s") + " in the last 7 days, " + p.days_available + " day" + (p.days_available === 1 ? "" : "s") + " available" + (p.pending ? " (" + p.pending + " awaiting a decision)" : "") : ""; });
+    document.querySelectorAll("th.st-r").forEach(function (th) { var p = byP[th.dataset.p]; seqClass(th); th.textContent = p ? Number(p.rate).toFixed(2) : ""; th.title = p ? p.name + ": " + p.n + " / max(" + p.days_available + ", " + (c.day_floor || 2) + ")" : ""; });
+    alignHeads();
     document.querySelectorAll("td.cell").forEach(function (td) {
       var day = td.dataset.day; if (days.indexOf(day) < 0) { td.textContent = ""; td.classList.remove("n0"); return; }
       var p = byP[td.dataset.p], n = p ? (p.by_day[day] || 0) : 0;
       td.textContent = n ? String(n) : "\u00b7"; td.classList.toggle("n0", !n);
       td.title = (p ? p.name : "") + " " + longLabel(day) + ": " + n + " lead" + (n === 1 ? "" : "s") + (td.classList.contains("abs") ? ", not available" : "");
     });
+  }
+  // The three header rows are sticky; the second and third sit below the measured height of the first (it grew in v1.6.0).
+  function alignHeads() {
+    var top = document.querySelector("tr.head th"); if (!top) return;
+    var h1 = top.offsetHeight, s1 = document.querySelector("tr.stat th"), h2 = s1 ? s1.offsetHeight : 23;
+    document.querySelectorAll("tr.stat th").forEach(function (th) { th.style.top = h1 + "px"; });
+    document.querySelectorAll("tr.stat2 th").forEach(function (th) { th.style.top = (h1 + h2) + "px"; });
   }
   function visibleTo() { var t = addDays(state.data.today, state.showWeeks * 7); return t < state.data.to ? t : state.data.to; }
 
@@ -297,7 +360,7 @@
 
   function grid() {
     var d = state.data, to = visibleTo(), rows = [], lastMonth = "";
-    var head = '<tr><th>Day</th>' + d.partners.map(function (p) { return '<th title="' + h(p.full_name) + '">' + h(initials(p.full_name)) + '</th>'; }).join("") + '</tr>';
+    var head = '<tr class="head"><th>Day</th>' + d.partners.map(function (p) { return '<th class="st-p" data-p="' + h(p.partner_id) + '" title="' + h(p.full_name) + '">' + h(initials(p.full_name)) + '<small></small></th>'; }).join("") + '</tr>';
     head += '<tr class="stat"><th title="Leads received in the last 7 days, today included - the engine\'s own count (self-created and test leads excluded, pending proposals included)">L7D</th>' + d.partners.map(function (p) { return '<th class="st-n" data-p="' + h(p.partner_id) + '">' + (state.counts ? "" : "&hellip;") + '</th>'; }).join("") + '</tr>';
     head += '<tr class="stat2"><th title="L7D divided by days available in the last 7 (minimum 2) - the rate the engine ranks on; lowest gets the next lead">per day</th>' + d.partners.map(function (p) { return '<th class="st-r" data-p="' + h(p.partner_id) + '"></th>'; }).join("") + '</tr>';
     for (var day = d.from; day <= to; day = addDays(day, 1)) {
@@ -326,7 +389,8 @@
   // Outcome as an icon and a word; outcomeText() stays the full wording, shown on hover.
   function outcomeHtml(L) {
     var full = outcomeText(L), st = L.state, ico, cls, word;
-    if (L.is_test || st === "test") { ico = "\u2715"; cls = "dim"; word = "Test"; }
+    if (L.exclusion === "not_a_lead" || st === "not_lead") { ico = "\u2715"; cls = "dim"; word = "Not a lead"; }
+    else if (L.is_test || st === "test") { ico = "\u2715"; cls = "dim"; word = "Test"; }
     else if (!st) { ico = "\u2013"; cls = "dim"; word = L.step === "skip" ? "Left alone" : "Nothing"; }
     else if (st === "confirmed") { ico = "\u2713"; cls = "ok"; word = L.decided_by === "auto" ? "Auto" : L.decided_by === "override_call" ? "Directed" : "Tracy"; }
     else if (st === "rejected") { ico = "\u21B7"; cls = "wait"; word = "Tracy: " + initials(L.override_partner || L.final_partner || "-"); }
@@ -339,6 +403,7 @@
   }
   function outcomeText(L) {
     var st = L.state;
+    if (L.exclusion === "not_a_lead" || st === "not_lead") return "Not a lead - not counted";
     if (L.is_test) return "Test lead - not counted";
     if (!st) return L.step === "skip" ? "Not handled by the engine" : (L.reason === "human_direct" ? "Nothing to do" : "-");
     if (st === "confirmed") return L.decided_by === "auto" ? "Allocated automatically" : L.decided_by === "override_call" ? "Allocated (directed)" : "Confirmed by Tracy";
@@ -353,12 +418,22 @@
   function loadLeads() {
     return call({ action: "leads", days: 14 }).then(function (r) {
       if (!r.ok) { if (r._status === 401) { signedOut(); return; } throw new Error(r.message || r.error); }
-      state.leads = r.leads; renderLeads();
+      state.leads = r.leads; stamp(); renderLeads();
     }).catch(function (e) { view.innerHTML = '<div class="card"><b>Could not load the leads.</b><p class="muted">' + h(e.message || e) + '</p></div>'; });
   }
   function ini(name) { return name ? '<span class="ini" title="' + h(name) + '">' + h(initials(name)) + '</span>' : "-"; }
+  function excl(L) { return L.exclusion || (L.is_test ? "test" : null); }
+  function actHtml(L) {
+    var x = excl(L);
+    if (x === "not_a_lead") return '<button class="tbtn on" data-id="' + h(L.lead_id) + '" data-k="undo">Not a lead - undo</button>';
+    if (x) return '<button class="tbtn on" data-id="' + h(L.lead_id) + '" data-k="undo">Test - undo</button>';
+    return '<button class="tbtn" data-id="' + h(L.lead_id) + '" data-k="test" title="A test record - the contact is flagged too, so future leads from them are marked [TEST]">Test</button>' +
+           '<button class="tbtn" data-id="' + h(L.lead_id) + '" data-k="not_a_lead" title="Spam, a supplier, not a buyer - the lead drops out of the counts; the contact is left alone">Not a lead</button>';
+  }
   function rowHtml(L) {
-    var cls = (L.is_test ? "test " : "") + (L.step === "skip" ? "skip" : ""), oc = outcomeHtml(L);
+    var x = excl(L);
+    var cls = (x === "not_a_lead" ? "notlead " : x ? "test " : L.moved ? "moved " : "") + (L.step === "skip" ? "skip" : ""), oc = outcomeHtml(L);
+    var nowTitle = L.moved ? "Moved: first with " + (L.partner_first || "-") + ", now with " + (L.partner_now || "-") + (L.engine_partner && L.step !== "skip" ? " (engine proposed " + L.engine_partner + ")" : "") : (L.partner_now || "");
     return '<tr class="' + cls.trim() + '" data-id="' + h(L.lead_id) + '">' +
       '<td class="when" data-l="When">' + h(whenLabel(L.received_at)) + '</td>' +
       '<td class="c" data-l="Contact" title="' + h(L.contact_name || "") + '"><a href="' + h(L.rex_url) + '" target="_blank" rel="noopener">' + h(L.contact_name || ("lead " + L.lead_id)) + '</a></td>' +
@@ -367,24 +442,26 @@
       '<td data-l="What happened">' + routeTag(L).replace("<span", '<span title="' + h(L.route) + '"') + '</td>' +
       '<td data-l="Engine">' + ini(L.step === "skip" ? "" : L.engine_partner) + '</td>' +
       '<td class="o" data-l="Outcome" title="' + h(oc.full) + '">' + oc.html + '</td>' +
-      '<td data-l="Partner now">' + ini(L.partner_now) + '</td>' +
-      '<td class="act"><button class="tbtn' + (L.is_test ? " on" : "") + '" data-id="' + h(L.lead_id) + '">' + (L.is_test ? "Test - undo" : "Mark as test") + '</button></td></tr>';
+      '<td data-l="Partner now" title="' + h(nowTitle) + '">' + ini(L.partner_now) + (L.moved ? ' <span class="ico wait" title="' + h(nowTitle) + '">\u21B7</span>' : "") + '</td>' +
+      '<td class="act">' + actHtml(L) + '</td></tr>';
   }
   function sumHtml() {
-    var n = { total: 0, engine: 0, fair: 0, rel: 0, dir: 0, skip: 0, test: 0 };
+    var n = { total: 0, engine: 0, fair: 0, rel: 0, dir: 0, skip: 0, test: 0, nl: 0, moved: 0 };
     state.leads.forEach(function (L) {
-      if (L.is_test) { n.test++; return; }
-      n.total++;
+      var x = excl(L);
+      if (x === "not_a_lead") { n.nl++; return; }
+      if (x) { n.test++; return; }
+      n.total++; if (L.moved) n.moved++;
       if (L.step === "skip") n.skip++; else { n.engine++; if (L.reason === "allocated_relationship") n.rel++; else if (L.reason === "allocated_directed") n.dir++; else if (L.reason === "allocated_rate" || L.reason === "allocated_rate_identity_conflict") n.fair++; }
     });
-    return '<span><b>' + n.total + '</b> leads</span><span><b>' + n.engine + '</b> handled by the engine (' + n.fair + ' fair share, ' + n.rel + ' existing owner, ' + n.dir + ' directed)</span><span><b>' + n.skip + '</b> left alone (Ed, MoneyPenny, Haus users)</span><span><b>' + n.test + '</b> test</span>';
+    return '<span><b>' + n.total + '</b> leads</span><span><b>' + n.engine + '</b> handled by the engine (' + n.fair + ' fair share, ' + n.rel + ' existing owner, ' + n.dir + ' directed)</span><span><b>' + n.skip + '</b> left alone (Ed, MoneyPenny, Haus users)</span><span><b>' + n.moved + '</b> moved or changed</span><span><b>' + n.test + '</b> test, <b>' + n.nl + '</b> not a lead</span>';
   }
   function renderLeads() {
     var d = state.data;
     state.keep = {};
     topbtns.classList.remove("hidden");
-    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a test lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.5.0 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
+    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest.";
+    foot.textContent = "HausOS planner v1.6.0 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day; everything else is live at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
@@ -392,18 +469,20 @@
       if (f === "engine" && (L.step === "skip" || L.is_test)) return false;
       if (f === "rel" && L.reason !== "allocated_relationship") return false;
       if (f === "skip" && L.step !== "skip") return false;
-      if (f === "real" && L.is_test && !state.keep[L.lead_id]) return false;
-      if (f === "test" && !L.is_test && !state.keep[L.lead_id]) return false;
+      if (f === "real" && excl(L) && !state.keep[L.lead_id]) return false;
+      if (f === "test" && !excl(L) && !state.keep[L.lead_id]) return false;
+      if (f === "moved" && !(L.moved && !excl(L)) && !state.keep[L.lead_id]) return false;
       if (q && ((L.contact_name || "") + " " + (L.development || "") + " " + (L.source || "") + " " + (L.engine_partner || "") + " " + (L.partner_now || "") + " " + L.lead_id).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     var html = '<div class="sum" id="sum">' + sumHtml() + '</div>';
-    html += '<div class="filters"><select id="lf"><option value="all">All leads</option><option value="real">Real leads only</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="skip">Left alone</option><option value="test">Test leads</option></select>' +
+    html += '<div class="filters"><select id="lf"><option value="all">All leads</option><option value="real">Real leads only</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="skip">Left alone</option><option value="moved">Moved or changed</option><option value="test">Test / not a lead</option></select>' +
             '<input id="lq" type="search" placeholder="Search name, development, partner..." value="' + h(state.lq) + '"><span class="muted">' + rows.length + ' shown</span></div>';
     html += '<div class="wrapl"><table class="leads"><thead><tr><th>When</th><th>Contact</th><th>Development</th><th>Source</th><th>What happened</th><th>Engine &rarr;</th><th>Outcome</th><th>Partner now</th><th></th></tr></thead><tbody>';
     rows.forEach(function (L) { html += rowHtml(L); });
     html += '</tbody></table></div>';
     if (!rows.length) html += '<p class="muted">Nothing matches.</p>';
+    html += '<div class="legend" style="margin-top:8px"><span><i style="background:#ffedd5"></i>Moved from the original partner, or allocated differently from the engine\'s recommendation</span><span><i style="background:#f3f4f6"></i>Test / not a lead (not counted)</span></div>';
     view.innerHTML = html;
     document.getElementById("lf").value = state.lf;
     document.getElementById("lf").onchange = function () { state.lf = this.value; renderLeads(); };
@@ -416,18 +495,20 @@
     var wrap = document.querySelector(".wrapl"); if (!wrap) return;
     wrap.onclick = function (ev) {
       var b = ev.target.closest(".tbtn"); if (!b || b.disabled) return;
-      var id = b.dataset.id, L = state.leads.filter(function (x) { return x.lead_id === id; })[0]; if (!L) return;
-      b.disabled = true; b.textContent = "Saving...";
-      call({ action: L.is_test ? "unmark_test" : "mark_test", lead_id: id }).then(function (r) {
-        b.disabled = false;
-        if (!r.ok) { b.textContent = L.is_test ? "Test - undo" : "Mark as test"; toast(r.message || r.error || "Not saved"); if (r._status === 401) signedOut(); return; }
-        L.is_test = !!r.is_test; if (L.is_test && L.state === "pending") L.state = "test";
-        state.keep[id] = true;
+      var id = b.dataset.id, k = b.dataset.k, L = state.leads.filter(function (x) { return x.lead_id === id; })[0]; if (!L) return;
+      var td = b.parentNode, before = td.innerHTML;
+      td.querySelectorAll(".tbtn").forEach(function (x) { x.disabled = true; }); b.textContent = "Saving...";
+      var body = k === "undo" ? { action: "unmark_test", lead_id: id } : { action: "mark_test", lead_id: id, kind: k };
+      call(body).then(function (r) {
+        if (!r.ok) { td.innerHTML = before; toast(r.message || r.error || "Not saved"); if (r._status === 401) signedOut(); return; }
+        L.is_test = !!r.is_test; L.exclusion = r.exclusion || null;
+        if (L.state === "pending" && L.exclusion) L.state = L.exclusion === "not_a_lead" ? "not_lead" : "test";
+        state.keep[id] = true; state.counts = null;   // the Planner tab reloads the engine's counts next time it is shown
         var tr = wrap.querySelector('tr[data-id="' + id + '"]');
         if (tr) { var tmp = document.createElement("tbody"); tmp.innerHTML = rowHtml(L); tr.replaceWith(tmp.firstElementChild); }
         var sum = document.getElementById("sum"); if (sum) sum.innerHTML = sumHtml();
-        toast(L.is_test ? "Marked as a test lead - no longer counted" : "Back in the counts");
-      }).catch(function () { b.disabled = false; b.textContent = L.is_test ? "Test - undo" : "Mark as test"; toast("Could not reach HausOS - not saved"); });
+        toast(L.exclusion === "not_a_lead" ? "Marked as not a lead - no longer counted" : L.exclusion ? "Marked as a test lead - no longer counted" : "Back in the counts");
+      }).catch(function () { td.innerHTML = before; toast("Could not reach HausOS - not saved"); });
     };
   }
 

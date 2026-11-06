@@ -6,7 +6,11 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.8.0 (6 Nov 2026)
+  HausOS partner availability planner v1.8.1 (6 Nov 2026)
+  v1.8.1 (David, 6 Nov): "Repeat?" tag on What happened for a lead keyed in by a Haus user whose
+  email or phone matches a contact a partner already owns (engine v0.6.x repeat check; API
+  repeat_of / repeat_contacts / repeat_already, lead_report v1.6). Hover names the partner and
+  contact; a tick variant when the lead is already with that partner. Filter "Repeat enquiries".
   v1.8.0 (David, 6 Nov): leads a partner created themselves (and still hold) get a lilac background -
   the engine leaves them out of that partner's fair share, so they do not appear in the Planner
   counts. Legend entry, filter "Partner's own", summary count, "own lead" note in the Outcome
@@ -171,6 +175,7 @@
   .leads tr.skip td { color:#6b7280; }
   .leads .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:999px; background:#eef2ff; color:#3730a3; white-space:nowrap; }
   .leads .tag.rel { background:#fef3c7; color:#92400e; } .leads .tag.skip { background:#f3f4f6; color:#6b7280; } .leads .tag.dir { background:#ecfeff; color:#155e75; } .leads .tag.test { background:#fee2e2; color:#991b1b; }
+  .leads .tag.rep { background:#fef3c7; color:#92400e; border:1px solid #f59e0b; font-weight:600; margin-left:4px; } .leads .tag.rep.ok { background:#f0fdf4; color:#166534; border-color:#86efac; font-weight:500; }
   .leads a { color:#1a56db; }
   .tbtn { font:inherit; font-size:12px; padding:4px 8px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; white-space:nowrap; }
   .tbtn.on { background:#fee2e2; border-color:#fecaca; color:#991b1b; }
@@ -318,7 +323,7 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.8.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
+    foot.textContent = "HausOS planner v1.8.1 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') +
             '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>2nd, 4th... = which lead they get next if nothing changes (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away today</span></div>';
@@ -443,6 +448,13 @@
 
   // ---- Leads tab (v1.4.0)
   function whenLabel(iso) { try { return new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); } catch (e) { return iso; } }
+  /* v1.8.1: the engine's repeat-enquiry check on a human-created lead (engine v0.6.x). */
+  function repeatTag(L) {
+    if (!L.repeat_of) return "";
+    var who = L.repeat_of, c = L.repeat_contacts ? " #" + L.repeat_contacts : "";
+    if (L.repeat_already) return ' <span class="tag rep ok" title="' + h("Repeat enquiry: matches " + who + "'s contact" + c + ", and the lead is with " + who + " - nothing to do") + '">Repeat \u2713</span>';
+    return ' <span class="tag rep" title="' + h("Looks like a repeat enquiry: " + (L.contact_name || "this enquirer") + " matches " + who + "'s contact" + c + ". The engine emailed a warning; if it is the same person, allocate to " + who + " and merge the contacts in Rex") + '">Repeat?</span>';
+  }
   function routeTag(L) {
     if (L.reason === "skipped_not_a_lead") return '<span class="tag test">Not a lead</span>';
     if (L.step === "skip") return '<span class="tag skip">Left alone</span>';
@@ -527,7 +539,7 @@
       '<td class="c" data-l="Contact" title="' + h(L.contact_name || "") + '"><a href="' + h(L.rex_url) + '" target="_blank" rel="noopener">' + h(L.contact_name || ("lead " + L.lead_id)) + '</a></td>' +
       '<td data-l="Development" title="' + h(L.development || "") + '">' + h(L.development || "-") + '</td>' +
       '<td data-l="Source">' + h(L.source || "-") + '</td>' +
-      '<td data-l="What happened">' + routeTag(L).replace("<span", '<span title="' + h(L.route) + '"') + '</td>' +
+      '<td data-l="What happened">' + routeTag(L).replace("<span", '<span title="' + h(L.route) + '"') + repeatTag(L) + '</td>' +
       '<td data-l="Engine">' + ini(L.step === "skip" ? "" : L.engine_partner) + '</td>' +
       '<td class="o" data-l="Outcome" title="' + h(oc.full) + '">' + oc.html + '</td>' +
       '<td data-l="Partner now" title="' + h(nowTitle) + '">' + ini(L.partner_now) + (L.moved ? ' <span class="ico wait" title="' + h(nowTitle) + '">\u21B7</span>' : "") + '</td>' +
@@ -549,13 +561,14 @@
     state.keep = {};
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and who has it now (as at the engine's last Rex pull). Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.8.0 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
+    foot.textContent = "HausOS planner v1.8.1 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
       var f = state.lf;
       if (f === "engine" && (L.step === "skip" || L.is_test)) return false;
       if (f === "rel" && L.reason !== "allocated_relationship") return false;
+      if (f === "repeat" && !L.repeat_of && !state.keep[L.lead_id]) return false;
       if (f === "skip" && L.step !== "skip") return false;
       if (f === "real" && excl(L) && !state.keep[L.lead_id]) return false;
       if (f === "test" && !excl(L) && !state.keep[L.lead_id]) return false;
@@ -565,7 +578,7 @@
       return true;
     });
     var html = '<div class="sum" id="sum">' + sumHtml() + '</div>';
-    html += '<div class="filters"><select id="lf"><option value="all">All leads</option><option value="real">Real leads only</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="skip">Left alone</option><option value="moved">Moved or changed</option><option value="self">Partner\'s own</option><option value="test">Test / not a lead</option></select>' +
+    html += '<div class="filters"><select id="lf"><option value="all">All leads</option><option value="real">Real leads only</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="repeat">Repeat enquiries</option><option value="skip">Left alone</option><option value="moved">Moved or changed</option><option value="self">Partner\'s own</option><option value="test">Test / not a lead</option></select>' +
             '<input id="lq" type="search" placeholder="Search name, development, partner..." value="' + h(state.lq) + '"><span class="muted">' + rows.length + ' shown</span></div>';
     html += '<div class="wrapl"><table class="leads"><thead><tr><th>When</th><th>Contact</th><th>Development</th><th>Source</th><th>What happened</th><th>Engine &rarr;</th><th>Outcome</th><th>Partner now</th><th></th></tr></thead><tbody>';
     rows.forEach(function (L) { html += rowHtml(L); });

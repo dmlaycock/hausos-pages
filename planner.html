@@ -6,7 +6,9 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.4.1 (6 Nov 2026)
+  HausOS partner availability planner v1.4.2 (6 Nov 2026)
+  v1.4.2: partner initials in Engine, Outcome and Partner now (full name on hover) so the
+  table fits the page (David, 6 Nov).
   v1.4.1: Leads tab tightened (David, 6 Nov): one line per lead. "What happened" shows the
   tag alone with the engine's reason on hover; Outcome is an icon and a word with the full
   text on hover; Mark as test updates the row in place (greyed, button becomes Undo, the row
@@ -81,7 +83,7 @@
   .filters select, .filters input { width:auto; padding:7px 9px; font-size:14px; }
   .sum { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:0 0 10px; }
   .sum b { color:var(--ink); }
-  main.wide { max-width:1120px; }
+  .leads .ini { font-weight:600; letter-spacing:.03em; cursor:help; }
   table.leads { border-collapse:collapse; width:100%; font-size:13px; }
   .leads th { text-align:left; padding:8px 6px; border-bottom:2px solid var(--line); font-weight:600; white-space:nowrap; position:sticky; top:0; background:#fff; z-index:2; }
   .leads td { padding:6px 6px; border-bottom:1px solid #f1f5f9; vertical-align:middle; white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
@@ -210,7 +212,6 @@
   function show() {
     tabs.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === state.tab); });
     store("hausos_planner_tab", state.tab);
-    document.querySelector("main").classList.toggle("wide", state.tab === "leads");
     if (state.tab === "leads") renderLeads(); else render();
   }
   tabs.querySelectorAll(".tab").forEach(function (b) { b.onclick = function () { state.tab = b.dataset.tab; history.replaceState(null, "", location.pathname + (state.tab === "leads" ? "#leads" : "")); show(); }; });
@@ -221,7 +222,7 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.4.1 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
+    foot.textContent = "HausOS planner v1.4.2 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') + '</div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
@@ -281,7 +282,7 @@
     if (L.is_test || st === "test") { ico = "\u2715"; cls = "dim"; word = "Test"; }
     else if (!st) { ico = "\u2013"; cls = "dim"; word = L.step === "skip" ? "Left alone" : "Nothing"; }
     else if (st === "confirmed") { ico = "\u2713"; cls = "ok"; word = L.decided_by === "auto" ? "Auto" : L.decided_by === "override_call" ? "Directed" : "Tracy"; }
-    else if (st === "rejected") { ico = "\u21B7"; cls = "wait"; word = "Tracy: " + (L.override_partner || L.final_partner || "-").split(" ")[0]; }
+    else if (st === "rejected") { ico = "\u21B7"; cls = "wait"; word = "Tracy: " + initials(L.override_partner || L.final_partner || "-"); }
     else if (st === "expired") { ico = "\u23F1"; cls = "no"; word = "Expired"; }
     else if (st === "superseded") { ico = "\u21B7"; cls = "dim"; word = "In Rex"; }
     else if (st === "pending") { ico = "\u23F3"; cls = "wait"; word = "Pending"; }
@@ -308,6 +309,7 @@
       state.leads = r.leads; renderLeads();
     }).catch(function (e) { view.innerHTML = '<div class="card"><b>Could not load the leads.</b><p class="muted">' + h(e.message || e) + '</p></div>'; });
   }
+  function ini(name) { return name ? '<span class="ini" title="' + h(name) + '">' + h(initials(name)) + '</span>' : "-"; }
   function rowHtml(L) {
     var cls = (L.is_test ? "test " : "") + (L.step === "skip" ? "skip" : ""), oc = outcomeHtml(L);
     return '<tr class="' + cls.trim() + '" data-id="' + h(L.lead_id) + '">' +
@@ -316,9 +318,9 @@
       '<td data-l="Development" title="' + h(L.development || "") + '">' + h(L.development || "-") + '</td>' +
       '<td data-l="Source">' + h(L.source || "-") + '</td>' +
       '<td data-l="What happened">' + routeTag(L).replace("<span", '<span title="' + h(L.route) + '"') + '</td>' +
-      '<td data-l="Engine">' + h(L.step === "skip" ? "-" : (L.engine_partner || "-")) + '</td>' +
+      '<td data-l="Engine">' + ini(L.step === "skip" ? "" : L.engine_partner) + '</td>' +
       '<td class="o" data-l="Outcome" title="' + h(oc.full) + '">' + oc.html + '</td>' +
-      '<td data-l="Partner now">' + h(L.partner_now || "-") + '</td>' +
+      '<td data-l="Partner now">' + ini(L.partner_now) + '</td>' +
       '<td class="act"><button class="tbtn' + (L.is_test ? " on" : "") + '" data-id="' + h(L.lead_id) + '">' + (L.is_test ? "Test - undo" : "Mark as test") + '</button></td></tr>';
   }
   function sumHtml() {
@@ -335,7 +337,7 @@
     state.keep = {};
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a test lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.4.1 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
+    foot.textContent = "HausOS planner v1.4.2 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {

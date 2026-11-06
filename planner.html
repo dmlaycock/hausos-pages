@@ -6,7 +6,12 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.4.4 (6 Nov 2026)
+  HausOS partner availability planner v1.5.0 (6 Nov 2026)
+  v1.5.0: lead counts on the Planner tab (David, 6 Nov). Each past-day and today cell shows how
+  many leads that partner received that day; two header rows show L7D (leads in the last 7
+  days) and per day (L7D / days available, floor 2 - the rate the engine ranks on). Numbers
+  come from the engine itself (API counts -> lead-allocate probe), so they match the emails:
+  self-created and test leads excluded, pending proposals included. Loaded after the grid.
   v1.4.4: the Leads tab uses the full window width (up to 1500px) so the table fits without
   horizontal scrolling on a laptop; the Planner tab keeps its 980px box (David, 6 Nov).
   v1.4.3: the default filter is "All leads", test leads included and greyed (David, 6 Nov);
@@ -74,7 +79,15 @@
   .grid td.cell:not(.abs):hover { outline:2px solid #a7f3d0; outline-offset:-2px; }
   .grid tr.locked td.cell:hover { outline:none; }
   .grid td.abs { background:var(--away) !important; color:var(--away-ink); font-size:14px; }
-  .grid td.abs::after { content:"\2022"; }
+  .grid td.abs:empty::after { content:"\2022"; }
+  .grid td.cell { font-variant-numeric:tabular-nums; font-size:13px; }
+  .grid td.cell.n0 { color:#c7ccd3; }
+  .grid tr.locked td.cell, .grid tr.catchup td.cell { color:#374151; }
+  .grid tr.locked td.cell.n0, .grid tr.catchup td.cell.n0 { color:#c7ccd3; }
+  .grid tr.stat th { top:33px; font-weight:600; font-size:12px; color:var(--ink); padding:3px 4px; border-bottom:1px solid var(--line); background:#f9fafb; }
+  .grid tr.stat2 th { top:56px; font-weight:400; font-size:11px; color:var(--muted); padding:2px 4px 5px; border-bottom:2px solid var(--line); background:#f9fafb; }
+  .grid tr.stat th:first-child, .grid tr.stat2 th:first-child { text-align:left; font-weight:600; color:var(--muted); font-size:11px; }
+  .grid tr.stat th.lo { color:var(--ok); }
   .grid tr.locked td.abs { opacity:.55; }
   .grid tr.catchup td { background:#fffbeb; }
   .grid tr.catchup td:first-child { color:#92400e; }
@@ -132,7 +145,7 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/partner-availability";
   var SHOW_WEEKS = 8, STEP_WEEKS = 8;
   var view = document.getElementById("view"), sub = document.getElementById("sub"), foot = document.getElementById("foot"), topbtns = document.getElementById("topbtns");
-  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {} };   // away["partner|day"] = true; keep[lead_id] = row toggled since the last full render (stays visible)
+  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {}, counts: null };   // away["partner|day"] = true; keep[lead_id] = row toggled since the last full render (stays visible)
   var tabs = document.getElementById("tabs");
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -228,7 +241,7 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.4.4 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
+    foot.textContent = "HausOS planner v1.5.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') + '</div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
@@ -238,7 +251,33 @@
     document.getElementById("range").textContent = "Showing " + longLabel(d.from) + " to " + longLabel(visibleTo()) + ".";
     document.getElementById("more").onclick = function () { state.showWeeks += STEP_WEEKS; render(); };
     bind();
+    if (state.counts) fillCounts(); else loadCounts();
     var today = document.querySelector("tr.today"), wrap = document.querySelector(".wrap"); if (today && wrap) wrap.scrollTop = Math.max(0, today.offsetTop - wrap.clientHeight / 3);
+  }
+
+  // ---- lead counts from the engine (v1.5.0)
+  function loadCounts() {
+    call({ action: "counts" }).then(function (r) {
+      if (!r.ok) { if (r._status === 401) { signedOut(); return; } markCountsFailed(r.message || r.error); return; }
+      state.counts = r; if (state.tab === "planner") fillCounts();
+    }).catch(function () { markCountsFailed("engine not reachable"); });
+  }
+  function markCountsFailed(msg) {
+    document.querySelectorAll("th.st-n").forEach(function (th) { th.textContent = "-"; th.title = "Lead counts unavailable: " + msg; });
+  }
+  function fillCounts() {
+    var c = state.counts; if (!c) return;
+    var byP = {}; c.partners.forEach(function (p) { byP[p.partner_id] = p; });
+    var days = c.days || [];
+    var best = null; c.partners.forEach(function (p) { if (p.available && (best === null || p.rate < best)) best = p.rate; });
+    document.querySelectorAll("th.st-n").forEach(function (th) { var p = byP[th.dataset.p]; th.textContent = p ? String(p.n) : "-"; th.title = p ? p.name + ": " + p.n + " lead" + (p.n === 1 ? "" : "s") + " in the last 7 days, " + p.days_available + " day" + (p.days_available === 1 ? "" : "s") + " available" + (p.pending ? " (" + p.pending + " awaiting a decision)" : "") : ""; th.classList.toggle("lo", !!p && p.available && p.rate === best); });
+    document.querySelectorAll("th.st-r").forEach(function (th) { var p = byP[th.dataset.p]; th.textContent = p ? Number(p.rate).toFixed(2) : ""; th.title = p ? p.name + ": " + p.n + " / max(" + p.days_available + ", " + (c.day_floor || 2) + ")" : ""; });
+    document.querySelectorAll("td.cell").forEach(function (td) {
+      var day = td.dataset.day; if (days.indexOf(day) < 0) { td.textContent = ""; td.classList.remove("n0"); return; }
+      var p = byP[td.dataset.p], n = p ? (p.by_day[day] || 0) : 0;
+      td.textContent = n ? String(n) : "\u00b7"; td.classList.toggle("n0", !n);
+      td.title = (p ? p.name : "") + " " + longLabel(day) + ": " + n + " lead" + (n === 1 ? "" : "s") + (td.classList.contains("abs") ? ", not available" : "");
+    });
   }
   function visibleTo() { var t = addDays(state.data.today, state.showWeeks * 7); return t < state.data.to ? t : state.data.to; }
 
@@ -259,6 +298,8 @@
   function grid() {
     var d = state.data, to = visibleTo(), rows = [], lastMonth = "";
     var head = '<tr><th>Day</th>' + d.partners.map(function (p) { return '<th title="' + h(p.full_name) + '">' + h(initials(p.full_name)) + '</th>'; }).join("") + '</tr>';
+    head += '<tr class="stat"><th title="Leads received in the last 7 days, today included - the engine\'s own count (self-created and test leads excluded, pending proposals included)">L7D</th>' + d.partners.map(function (p) { return '<th class="st-n" data-p="' + h(p.partner_id) + '">' + (state.counts ? "" : "&hellip;") + '</th>'; }).join("") + '</tr>';
+    head += '<tr class="stat2"><th title="L7D divided by days available in the last 7 (minimum 2) - the rate the engine ranks on; lowest gets the next lead">per day</th>' + d.partners.map(function (p) { return '<th class="st-r" data-p="' + h(p.partner_id) + '"></th>'; }).join("") + '</tr>';
     for (var day = d.from; day <= to; day = addDays(day, 1)) {
       var m = monthLabel(day);
       if (m !== lastMonth) { rows.push('<tr class="month"><td colspan="' + (d.partners.length + 1) + '">' + h(m) + '</td></tr>'); lastMonth = m; }
@@ -343,7 +384,7 @@
     state.keep = {};
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a test lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.4.4 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
+    foot.textContent = "HausOS planner v1.5.0 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
@@ -401,6 +442,7 @@
         var strip = document.querySelector(".strip"); if (strip) strip.innerHTML = stripHtml();
         call({ action: "toggle", partner_id: p, day: day }).then(function (r) {
           td.classList.remove("busy");
+          if (r.ok && state.counts && (state.counts.days || []).indexOf(day) >= 0) { state.counts = null; loadCounts(); }
           if (!r.ok) {
             if (was) state.away[key] = true; else delete state.away[key];
             td.classList.toggle("abs", was); if (strip) strip.innerHTML = stripHtml();

@@ -6,7 +6,11 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.4.0 (6 Nov 2026)
+  HausOS partner availability planner v1.4.1 (6 Nov 2026)
+  v1.4.1: Leads tab tightened (David, 6 Nov): one line per lead. "What happened" shows the
+  tag alone with the engine's reason on hover; Outcome is an icon and a word with the full
+  text on hover; Mark as test updates the row in place (greyed, button becomes Undo, the row
+  stays in view and the page does not jump), so the action is easy to see and to reverse.
   v1.4.0: second tab "Leads" (David, 6 Nov) - every lead the engine received in the last 14
   days (API leads -> ops.lead_report): when, contact, development, source, what the engine
   did and why (fair share / existing contact owner / directed / left to Ed etc.), the outcome,
@@ -77,9 +81,13 @@
   .filters select, .filters input { width:auto; padding:7px 9px; font-size:14px; }
   .sum { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:0 0 10px; }
   .sum b { color:var(--ink); }
+  main.wide { max-width:1120px; }
   table.leads { border-collapse:collapse; width:100%; font-size:13px; }
   .leads th { text-align:left; padding:8px 6px; border-bottom:2px solid var(--line); font-weight:600; white-space:nowrap; position:sticky; top:0; background:#fff; z-index:2; }
-  .leads td { padding:7px 6px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+  .leads td { padding:6px 6px; border-bottom:1px solid #f1f5f9; vertical-align:middle; white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+  .leads td.o { white-space:nowrap; } .leads .ico { display:inline-block; width:16px; text-align:center; margin-right:3px; font-weight:700; }
+  .leads .ico.ok { color:var(--ok); } .leads .ico.wait { color:#b45309; } .leads .ico.no { color:var(--no); } .leads .ico.dim { color:#9ca3af; }
+  .leads td[title], .leads .tag[title] { cursor:help; }
   .leads td.when { white-space:nowrap; color:var(--muted); }
   .leads tr.test td { color:#9ca3af; } .leads tr.test td.c { text-decoration:line-through; }
   .leads tr.skip td { color:#6b7280; }
@@ -93,7 +101,7 @@
     table.leads, .leads thead, .leads tbody, .leads tr, .leads td { display:block; }
     .leads thead { display:none; }
     .leads tr { border-bottom:1px solid var(--line); padding:8px 10px; }
-    .leads td { border:0; padding:2px 0; }
+    .leads td { border:0; padding:2px 0; white-space:normal; max-width:none; }
     .leads td::before { content:attr(data-l) ": "; color:var(--muted); font-size:12px; }
     .leads td.c::before, .leads td.when::before, .leads td.act::before { content:""; }
     .leads td.c { font-weight:600; font-size:14px; }
@@ -117,7 +125,7 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/partner-availability";
   var SHOW_WEEKS = 8, STEP_WEEKS = 8;
   var view = document.getElementById("view"), sub = document.getElementById("sub"), foot = document.getElementById("foot"), topbtns = document.getElementById("topbtns");
-  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "" };   // away["partner|day"] = true
+  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {} };   // away["partner|day"] = true; keep[lead_id] = row toggled since the last full render (stays visible)
   var tabs = document.getElementById("tabs");
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -202,6 +210,7 @@
   function show() {
     tabs.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === state.tab); });
     store("hausos_planner_tab", state.tab);
+    document.querySelector("main").classList.toggle("wide", state.tab === "leads");
     if (state.tab === "leads") renderLeads(); else render();
   }
   tabs.querySelectorAll(".tab").forEach(function (b) { b.onclick = function () { state.tab = b.dataset.tab; history.replaceState(null, "", location.pathname + (state.tab === "leads" ? "#leads" : "")); show(); }; });
@@ -212,7 +221,7 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.4.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
+    foot.textContent = "HausOS planner v1.4.1 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') + '</div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
@@ -266,6 +275,20 @@
     if (L.reason === "fallback_no_eligible_partner") return '<span class="tag rel">Nobody available</span>';
     return '<span class="tag">Fair share</span>';
   }
+  // Outcome as an icon and a word; outcomeText() stays the full wording, shown on hover.
+  function outcomeHtml(L) {
+    var full = outcomeText(L), st = L.state, ico, cls, word;
+    if (L.is_test || st === "test") { ico = "\u2715"; cls = "dim"; word = "Test"; }
+    else if (!st) { ico = "\u2013"; cls = "dim"; word = L.step === "skip" ? "Left alone" : "Nothing"; }
+    else if (st === "confirmed") { ico = "\u2713"; cls = "ok"; word = L.decided_by === "auto" ? "Auto" : L.decided_by === "override_call" ? "Directed" : "Tracy"; }
+    else if (st === "rejected") { ico = "\u21B7"; cls = "wait"; word = "Tracy: " + (L.override_partner || L.final_partner || "-").split(" ")[0]; }
+    else if (st === "expired") { ico = "\u23F1"; cls = "no"; word = "Expired"; }
+    else if (st === "superseded") { ico = "\u21B7"; cls = "dim"; word = "In Rex"; }
+    else if (st === "pending") { ico = "\u23F3"; cls = "wait"; word = "Pending"; }
+    else if (st === "error") { ico = "\u26A0"; cls = "no"; word = "Error"; }
+    else { ico = "\u2022"; cls = "dim"; word = st; }
+    return { html: '<span class="ico ' + cls + '">' + ico + '</span>' + h(word), full: full };
+  }
   function outcomeText(L) {
     var st = L.state;
     if (L.is_test) return "Test lead - not counted";
@@ -285,65 +308,78 @@
       state.leads = r.leads; renderLeads();
     }).catch(function (e) { view.innerHTML = '<div class="card"><b>Could not load the leads.</b><p class="muted">' + h(e.message || e) + '</p></div>'; });
   }
-  function renderLeads() {
-    var d = state.data;
-    topbtns.classList.remove("hidden");
-    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a test lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.4.0 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
-    if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
-    var all = state.leads, q = state.lq.toLowerCase();
+  function rowHtml(L) {
+    var cls = (L.is_test ? "test " : "") + (L.step === "skip" ? "skip" : ""), oc = outcomeHtml(L);
+    return '<tr class="' + cls.trim() + '" data-id="' + h(L.lead_id) + '">' +
+      '<td class="when" data-l="When">' + h(whenLabel(L.received_at)) + '</td>' +
+      '<td class="c" data-l="Contact" title="' + h(L.contact_name || "") + '"><a href="' + h(L.rex_url) + '" target="_blank" rel="noopener">' + h(L.contact_name || ("lead " + L.lead_id)) + '</a></td>' +
+      '<td data-l="Development" title="' + h(L.development || "") + '">' + h(L.development || "-") + '</td>' +
+      '<td data-l="Source">' + h(L.source || "-") + '</td>' +
+      '<td data-l="What happened">' + routeTag(L).replace("<span", '<span title="' + h(L.route) + '"') + '</td>' +
+      '<td data-l="Engine">' + h(L.step === "skip" ? "-" : (L.engine_partner || "-")) + '</td>' +
+      '<td class="o" data-l="Outcome" title="' + h(oc.full) + '">' + oc.html + '</td>' +
+      '<td data-l="Partner now">' + h(L.partner_now || "-") + '</td>' +
+      '<td class="act"><button class="tbtn' + (L.is_test ? " on" : "") + '" data-id="' + h(L.lead_id) + '">' + (L.is_test ? "Test - undo" : "Mark as test") + '</button></td></tr>';
+  }
+  function sumHtml() {
     var n = { total: 0, engine: 0, fair: 0, rel: 0, dir: 0, skip: 0, test: 0 };
-    all.forEach(function (L) {
+    state.leads.forEach(function (L) {
       if (L.is_test) { n.test++; return; }
       n.total++;
       if (L.step === "skip") n.skip++; else { n.engine++; if (L.reason === "allocated_relationship") n.rel++; else if (L.reason === "allocated_directed") n.dir++; else if (L.reason === "allocated_rate" || L.reason === "allocated_rate_identity_conflict") n.fair++; }
     });
+    return '<span><b>' + n.total + '</b> leads</span><span><b>' + n.engine + '</b> handled by the engine (' + n.fair + ' fair share, ' + n.rel + ' existing owner, ' + n.dir + ' directed)</span><span><b>' + n.skip + '</b> left alone (Ed, MoneyPenny, Haus users)</span><span><b>' + n.test + '</b> test</span>';
+  }
+  function renderLeads() {
+    var d = state.data;
+    state.keep = {};
+    topbtns.classList.remove("hidden");
+    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a test lead and it drops out of the partners' lead counts, the record and the daily digest.";
+    foot.textContent = "HausOS planner v1.4.1 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
+    if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
+    var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
       var f = state.lf;
       if (f === "engine" && (L.step === "skip" || L.is_test)) return false;
       if (f === "rel" && L.reason !== "allocated_relationship") return false;
       if (f === "skip" && L.step !== "skip") return false;
-      if (f === "test" && !L.is_test) return false;
-      if (f === "all" && L.is_test) return false;
+      if (f === "all" && L.is_test && !state.keep[L.lead_id]) return false;
+      if (f === "test" && !L.is_test && !state.keep[L.lead_id]) return false;
       if (q && ((L.contact_name || "") + " " + (L.development || "") + " " + (L.source || "") + " " + (L.engine_partner || "") + " " + (L.partner_now || "") + " " + L.lead_id).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
-    var html = '<div class="sum"><span><b>' + n.total + '</b> leads</span><span><b>' + n.engine + '</b> handled by the engine (' + n.fair + ' fair share, ' + n.rel + ' existing owner, ' + n.dir + ' directed)</span><span><b>' + n.skip + '</b> left alone (Ed, MoneyPenny, Haus users)</span><span><b>' + n.test + '</b> test</span></div>';
+    var html = '<div class="sum" id="sum">' + sumHtml() + '</div>';
     html += '<div class="filters"><select id="lf"><option value="all">All real leads</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="skip">Left alone</option><option value="test">Test leads</option></select>' +
             '<input id="lq" type="search" placeholder="Search name, development, partner..." value="' + h(state.lq) + '"><span class="muted">' + rows.length + ' shown</span></div>';
     html += '<div class="wrapl"><table class="leads"><thead><tr><th>When</th><th>Contact</th><th>Development</th><th>Source</th><th>What happened</th><th>Engine &rarr;</th><th>Outcome</th><th>Partner now</th><th></th></tr></thead><tbody>';
-    rows.forEach(function (L) {
-      var cls = (L.is_test ? "test " : "") + (L.step === "skip" ? "skip" : "");
-      html += '<tr class="' + cls.trim() + '" data-id="' + h(L.lead_id) + '">' +
-        '<td class="when" data-l="When">' + h(whenLabel(L.received_at)) + '</td>' +
-        '<td class="c" data-l="Contact"><a href="' + h(L.rex_url) + '" target="_blank" rel="noopener">' + h(L.contact_name || ("lead " + L.lead_id)) + '</a></td>' +
-        '<td data-l="Development">' + h(L.development || "-") + '</td>' +
-        '<td data-l="Source">' + h(L.source || "-") + '</td>' +
-        '<td data-l="What happened">' + routeTag(L) + ' <span class="muted">' + h(L.route) + '</span></td>' +
-        '<td data-l="Engine">' + h(L.step === "skip" ? "-" : (L.engine_partner || "-")) + '</td>' +
-        '<td data-l="Outcome">' + h(outcomeText(L)) + '</td>' +
-        '<td data-l="Partner now">' + h(L.partner_now || "-") + '</td>' +
-        '<td class="act"><button class="tbtn' + (L.is_test ? " on" : "") + '" data-id="' + h(L.lead_id) + '">' + (L.is_test ? "Test - undo" : "Mark as test") + '</button></td></tr>';
-    });
+    rows.forEach(function (L) { html += rowHtml(L); });
     html += '</tbody></table></div>';
     if (!rows.length) html += '<p class="muted">Nothing matches.</p>';
     view.innerHTML = html;
     document.getElementById("lf").value = state.lf;
     document.getElementById("lf").onchange = function () { state.lf = this.value; renderLeads(); };
     var lq = document.getElementById("lq"); lq.oninput = function () { state.lq = this.value; renderLeads(); var e = document.getElementById("lq"); e.focus(); e.setSelectionRange(e.value.length, e.value.length); };
-    document.querySelectorAll(".tbtn").forEach(function (b) {
-      b.onclick = function () {
-        var id = b.dataset.id, L = state.leads.filter(function (x) { return x.lead_id === id; })[0]; if (!L) return;
-        b.disabled = true;
-        call({ action: L.is_test ? "unmark_test" : "mark_test", lead_id: id }).then(function (r) {
-          b.disabled = false;
-          if (!r.ok) { toast(r.message || r.error || "Not saved"); if (r._status === 401) signedOut(); return; }
-          L.is_test = !!r.is_test; if (L.is_test && L.state === "pending") L.state = "test";
-          toast(L.is_test ? "Marked as a test lead - no longer counted" : "Back in the counts");
-          renderLeads();
-        }).catch(function () { b.disabled = false; toast("Could not reach HausOS - not saved"); });
-      };
-    });
+    bindTestButtons();
+  }
+  // Mark as test / undo: the row is redrawn where it stands (greyed or not), the summary counts
+  // follow, and nothing else moves, so the change is easy to see and one click to reverse.
+  function bindTestButtons() {
+    var wrap = document.querySelector(".wrapl"); if (!wrap) return;
+    wrap.onclick = function (ev) {
+      var b = ev.target.closest(".tbtn"); if (!b || b.disabled) return;
+      var id = b.dataset.id, L = state.leads.filter(function (x) { return x.lead_id === id; })[0]; if (!L) return;
+      b.disabled = true; b.textContent = "Saving...";
+      call({ action: L.is_test ? "unmark_test" : "mark_test", lead_id: id }).then(function (r) {
+        b.disabled = false;
+        if (!r.ok) { b.textContent = L.is_test ? "Test - undo" : "Mark as test"; toast(r.message || r.error || "Not saved"); if (r._status === 401) signedOut(); return; }
+        L.is_test = !!r.is_test; if (L.is_test && L.state === "pending") L.state = "test";
+        state.keep[id] = true;
+        var tr = wrap.querySelector('tr[data-id="' + id + '"]');
+        if (tr) { var tmp = document.createElement("tbody"); tmp.innerHTML = rowHtml(L); tr.replaceWith(tmp.firstElementChild); }
+        var sum = document.getElementById("sum"); if (sum) sum.innerHTML = sumHtml();
+        toast(L.is_test ? "Marked as a test lead - no longer counted" : "Back in the counts");
+      }).catch(function () { b.disabled = false; b.textContent = L.is_test ? "Test - undo" : "Mark as test"; toast("Could not reach HausOS - not saved"); });
+    };
   }
 
   // ---- one click = toggle (optimistic; reverts if the API says no)

@@ -6,7 +6,14 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.7.0 (6 Nov 2026)
+  HausOS partner availability planner v1.7.1 (6 Nov 2026)
+  v1.7.1 (David, 6 Nov): the sequence is now a projection of the engine's rule, not the current
+  standings. The page replays the engine's own choice (lowest leads per available day, floor 2;
+  tie -> longest since last lead; then name) lead by lead, giving each lead to the winner and
+  moving on, for the next 8 fair-share leads. A strip above the grid shows that order (partners
+  repeat - e.g. CH, VF, CH, JS...), and each column's label is the lead number at which that
+  partner first gets one (NEXT, 2nd, 4th, 7th...), shaded in that order. The projection assumes
+  nothing else changes (no planner toggles, no relationship or directed leads, same day).
   v1.7.0 (David, 6 Nov: faster load): the Planner tab's counts come from the engine's fair-share
   cache (API counts -> lead-allocate cached=1, about 0.1 s) on first load, tab switches and after
   a mark; the Refresh button asks for a live Rex pull (counts {live:true}); the API itself goes
@@ -115,7 +122,12 @@
   .grid th.seq-5, .grid tr.stat th.seq-5, .grid tr.stat2 th.seq-5 { background:#bfdbfe; color:#1e3a8a; }
   .grid th.seq-6, .grid tr.stat th.seq-6, .grid tr.stat2 th.seq-6, .grid th.seq-7, .grid tr.stat th.seq-7, .grid tr.stat2 th.seq-7 { background:#dbeafe; color:#1e3a8a; }
   .grid th.seq-away, .grid tr.stat th.seq-away, .grid tr.stat2 th.seq-away { background:#e5e7eb; color:#6b7280; }
+  .queue .q.seq-1 { background:var(--ok); color:#fff; } .queue .q.seq-2 { background:#1d4ed8; color:#fff; } .queue .q.seq-3 { background:#3b82f6; color:#fff; }
+  .queue .q.seq-4 { background:#93c5fd; color:#1e3a8a; } .queue .q.seq-5 { background:#bfdbfe; color:#1e3a8a; } .queue .q.seq-6, .queue .q.seq-7 { background:#dbeafe; color:#1e3a8a; }
   .grid th.seq-1 { font-size:15px; }
+  .queue { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 8px; font-size:13px; }
+  .queue .q { display:inline-block; min-width:40px; text-align:center; padding:4px 8px; border-radius:6px; font-weight:700; letter-spacing:.03em; }
+  .queue .q small { display:block; font-size:10px; font-weight:600; opacity:.85; letter-spacing:0; }
   .grid tr.stat th.seq-1 { font-size:14px; }
   .grid tr.locked td.abs { opacity:.55; }
   .grid tr.catchup td { background:#fffbeb; }
@@ -291,11 +303,12 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.7.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
+    foot.textContent = "HausOS planner v1.7.1 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') +
-            '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>then in this order (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away today</span></div>';
-    html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + ' <span id="asat"></span></p>';
+            '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>2nd, 4th... = which lead they get next if nothing changes (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away today</span></div>';
+    html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '<span id="asat" style="display:block;margin-top:2px"></span></p>';
+    html += '<div class="queue" id="queue"></div>';
     html += '<div class="wrap">' + grid() + '</div>';
     html += '<p style="margin:10px 0 0"><button class="btn ghost sm" id="more">Show further ahead</button> <span class="muted" id="range"></span></p>';
     view.innerHTML = html;
@@ -329,15 +342,26 @@
     var c = state.counts; if (!c) return;
     var byP = {}; c.partners.forEach(function (p) { byP[p.partner_id] = p; });
     var days = c.days || [];
-    // Sequence: the engine's ranking order (lowest rate first, tie-break longest since last lead), available partners only.
-    var seq = {}, k = 0; c.partners.forEach(function (p) { if (p.available) seq[p.partner_id] = ++k; });
-    var ord = ["", "NEXT", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"];
-    function seqClass(th) { var p = byP[th.dataset.p]; th.className = th.className.replace(/\bseq-\S+/g, "").trim(); if (!p) return; th.classList.add(p.available ? "seq-" + Math.min(seq[p.partner_id], 7) : "seq-away"); }
+    // v1.7.1: project the engine's rule forward. Each lead goes to the lowest leads-per-available-day (floor day_floor);
+    // tie -> longest since last lead; then name. The winner's count goes up and its "last" becomes now, then repeat.
+    var q = projectQueue(c, 8);
+    var first = {}; q.forEach(function (id, i) { if (first[id] === undefined) first[id] = i + 1; });   // lead number at which each partner first gets one
+    var order = Object.keys(first).sort(function (a, b) { return first[a] - first[b]; });
+    var shade = {}; order.forEach(function (id, i) { shade[id] = i + 1; });
+    function ordinal(n) { return n === 1 ? "NEXT" : n + (n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th"); }
+    function seqClass(th) { var p = byP[th.dataset.p]; th.className = th.className.replace(/\bseq-\S+/g, "").trim(); if (!p) return; th.classList.add(!p.available ? "seq-away" : shade[p.partner_id] ? "seq-" + Math.min(shade[p.partner_id], 7) : "seq-7"); }
     document.querySelectorAll("th.st-p").forEach(function (th) {
       var p = byP[th.dataset.p], sm = th.querySelector("small"); seqClass(th);
-      if (sm) sm.textContent = p ? (p.available ? ord[seq[p.partner_id]] || "" : "away") : "";
-      th.title = p ? p.name + (p.available ? (seq[p.partner_id] === 1 ? " - due the next lead" : " - " + ord[seq[p.partner_id]] + " in line") : " - away today, not in the running") : th.title;
+      var f = p ? first[p.partner_id] : undefined;
+      if (sm) sm.textContent = p ? (p.available ? (f ? ordinal(f) : "later") : "away") : "";
+      th.title = p ? p.name + (p.available ? (f === 1 ? " - due the next lead" : f ? " - gets the " + ordinal(f) + " lead from now, if nothing changes" : " - not in the next " + q.length + " leads") : " - away today, not in the running") : th.title;
     });
+    var qel = document.getElementById("queue");
+    if (qel) {
+      var cls = ["", "seq-1", "seq-2", "seq-3", "seq-4", "seq-5", "seq-6", "seq-7"];
+      qel.innerHTML = '<span class="muted">If nothing changes, the next ' + q.length + ' fair-share leads go:</span>' + q.map(function (id, i) { var p = byP[id]; return '<span class="q grid-th ' + (cls[Math.min(shade[id], 7)] || "seq-7") + '" title="' + h(p.name) + ' - lead ' + (i + 1) + '">' + h(initials(p.name)) + '<small>' + (i + 1) + '</small></span>'; }).join("") +
+        '<span class="muted" title="Lowest leads per available day gets the lead; a tie goes to whoever has waited longest. Leads an existing contact owner or a partner ID claims skip the queue.">(engine rule replayed from the counts above)</span>';
+    }
     document.querySelectorAll("th.st-n").forEach(function (th) { var p = byP[th.dataset.p]; seqClass(th); th.textContent = p ? String(p.n) : "-"; th.title = p ? p.name + ": " + p.n + " lead" + (p.n === 1 ? "" : "s") + " in the last 7 days, " + p.days_available + " day" + (p.days_available === 1 ? "" : "s") + " available" + (p.pending ? " (" + p.pending + " awaiting a decision)" : "") : ""; });
     document.querySelectorAll("th.st-r").forEach(function (th) { var p = byP[th.dataset.p]; seqClass(th); th.textContent = p ? Number(p.rate).toFixed(2) : ""; th.title = p ? p.name + ": " + p.n + " / max(" + p.days_available + ", " + (c.day_floor || 2) + ")" : ""; });
     var asat = document.getElementById("asat"); if (asat) { asat.textContent = asAtText(c); asat.title = c.cached ? "The engine keeps its last pull of the 7-day lead list; marks, planner days and pending proposals are applied live on top of it." : ""; }
@@ -355,6 +379,18 @@
     var h1 = top.offsetHeight, s1 = document.querySelector("tr.stat th"), h2 = s1 ? s1.offsetHeight : 23;
     document.querySelectorAll("tr.stat th").forEach(function (th) { th.style.top = h1 + "px"; });
     document.querySelectorAll("tr.stat2 th").forEach(function (th) { th.style.top = (h1 + h2) + "px"; });
+  }
+  // The engine's fair-share choice, replayed n times (lead-allocate fairShareRank: rate = n / max(days, floor); sort rate, last, name).
+  function projectQueue(c, n) {
+    var floor = c.day_floor || 2, now = Date.now();
+    var st = c.partners.filter(function (p) { return p.available; }).map(function (p) { return { id: p.partner_id, name: p.name, n: Number(p.n) || 0, days: Number(p.days_available) || 0, last: p.last ? Date.parse(p.last) || 0 : 0 }; });
+    var out = [];
+    for (var i = 0; i < n && st.length; i++) {
+      st.forEach(function (x) { x.rate = x.n / Math.max(x.days, floor); });
+      st.sort(function (a, b) { return a.rate - b.rate || a.last - b.last || a.name.localeCompare(b.name); });
+      var w = st[0]; out.push(w.id); w.n += 1; w.last = now + i;
+    }
+    return out;
   }
   function visibleTo() { var t = addDays(state.data.today, state.showWeeks * 7); return t < state.data.to ? t : state.data.to; }
 
@@ -475,7 +511,7 @@
     state.keep = {};
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.7.0 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day; everything else is live at the last refresh.";
+    foot.textContent = "HausOS planner v1.7.1 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day; everything else is live at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {

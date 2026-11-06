@@ -6,7 +6,11 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.7.3 (6 Nov 2026)
+  HausOS partner availability planner v1.8.0 (6 Nov 2026)
+  v1.8.0 (David, 6 Nov): leads a partner created themselves (and still hold) get a lilac background -
+  the engine leaves them out of that partner's fair share, so they do not appear in the Planner
+  counts. Legend entry, filter "Partner's own", summary count, "own lead" note in the Outcome
+  hover. API self_created / created_by (lead_report v1.5).
   v1.7.3 (David, 6 Nov): wording only - "Partner now" is now the assignee at the engine's last Rex
   pull (ops.lead_report v1.4), falling back to the warehouse, so the Leads tab agrees with the
   Planner tab's counts within the same refresh. Hover on the cell shows the as-at time.
@@ -161,6 +165,7 @@
   .leads td[title], .leads .tag[title] { cursor:help; }
   .leads td.when { white-space:nowrap; color:var(--muted); }
   .leads tr.moved td { background:#ffedd5; }
+  .leads tr.self td { background:#f3e8ff; }
   .leads tr.test td, .leads tr.notlead td { background:#f3f4f6; color:#9ca3af; } .leads tr.test td.c, .leads tr.notlead td.c { text-decoration:line-through; }
   .leads td.act { white-space:nowrap; } .leads td.act .tbtn + .tbtn { margin-left:4px; }
   .leads tr.skip td { color:#6b7280; }
@@ -174,7 +179,7 @@
     table.leads, .leads thead, .leads tbody, .leads tr, .leads td { display:block; }
     .leads thead { display:none; }
     .leads tr { border-bottom:1px solid var(--line); padding:8px 10px; }
-    .leads tr.moved, .leads tr.test, .leads tr.notlead { border-radius:6px; }
+    .leads tr.moved, .leads tr.test, .leads tr.notlead, .leads tr.self { border-radius:6px; }
     .leads td { border:0; padding:2px 0; white-space:normal; max-width:none; }
     .leads td::before { content:attr(data-l) ": "; color:var(--muted); font-size:12px; }
     .leads td.c::before, .leads td.when::before, .leads td.act::before { content:""; }
@@ -313,7 +318,7 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.7.3 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
+    foot.textContent = "HausOS planner v1.8.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') +
             '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>2nd, 4th... = which lead they get next if nothing changes (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away today</span></div>';
@@ -514,9 +519,9 @@
   }
   function rowHtml(L) {
     var x = excl(L);
-    var cls = (x === "not_a_lead" ? "notlead " : x ? "test " : L.moved ? "moved " : "") + (L.step === "skip" ? "skip" : ""), oc = outcomeHtml(L);
+    var cls = (x === "not_a_lead" ? "notlead " : x ? "test " : L.self_created ? "self " : L.moved ? "moved " : "") + (L.step === "skip" ? "skip" : ""), oc = outcomeHtml(L);
     var asAt = ""; try { asAt = L.partner_now_as_at ? " (as at " + new Date(L.partner_now_as_at).toLocaleString("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ")" : ""; } catch (e) {}
-    var nowTitle = (L.moved ? "Moved: first with " + (L.partner_first || "-") + ", now with " + (L.partner_now || "-") + (L.engine_partner && L.step !== "skip" ? " (engine proposed " + L.engine_partner + ")" : "") : (L.partner_now || "")) + asAt;
+    var nowTitle = (L.self_created ? "Created by " + (L.partner_now || "the partner") + " themselves - not counted in their fair share" : L.moved ? "Moved: first with " + (L.partner_first || "-") + ", now with " + (L.partner_now || "-") + (L.engine_partner && L.step !== "skip" ? " (engine proposed " + L.engine_partner + ")" : "") : (L.partner_now || "")) + asAt;
     return '<tr class="' + cls.trim() + '" data-id="' + h(L.lead_id) + '">' +
       '<td class="when" data-l="When">' + h(whenLabel(L.received_at)) + '</td>' +
       '<td class="c" data-l="Contact" title="' + h(L.contact_name || "") + '"><a href="' + h(L.rex_url) + '" target="_blank" rel="noopener">' + h(L.contact_name || ("lead " + L.lead_id)) + '</a></td>' +
@@ -529,22 +534,22 @@
       '<td class="act">' + actHtml(L) + '</td></tr>';
   }
   function sumHtml() {
-    var n = { total: 0, engine: 0, fair: 0, rel: 0, dir: 0, skip: 0, test: 0, nl: 0, moved: 0 };
+    var n = { total: 0, engine: 0, fair: 0, rel: 0, dir: 0, skip: 0, test: 0, nl: 0, moved: 0, self: 0 };
     state.leads.forEach(function (L) {
       var x = excl(L);
       if (x === "not_a_lead") { n.nl++; return; }
       if (x) { n.test++; return; }
-      n.total++; if (L.moved) n.moved++;
+      n.total++; if (L.moved) n.moved++; if (L.self_created) n.self++;
       if (L.step === "skip") n.skip++; else { n.engine++; if (L.reason === "allocated_relationship") n.rel++; else if (L.reason === "allocated_directed") n.dir++; else if (L.reason === "allocated_rate" || L.reason === "allocated_rate_identity_conflict") n.fair++; }
     });
-    return '<span><b>' + n.total + '</b> leads</span><span><b>' + n.engine + '</b> handled by the engine (' + n.fair + ' fair share, ' + n.rel + ' existing owner, ' + n.dir + ' directed)</span><span><b>' + n.skip + '</b> left alone (Ed, MoneyPenny, Haus users)</span><span><b>' + n.moved + '</b> moved or changed</span><span><b>' + n.test + '</b> test, <b>' + n.nl + '</b> not a lead</span>';
+    return '<span><b>' + n.total + '</b> leads</span><span><b>' + n.engine + '</b> handled by the engine (' + n.fair + ' fair share, ' + n.rel + ' existing owner, ' + n.dir + ' directed)</span><span><b>' + n.skip + '</b> left alone (Ed, MoneyPenny, Haus users)</span><span><b>' + n.moved + '</b> moved or changed</span><span><b>' + n.self + '</b> partner\'s own (not counted)</span><span><b>' + n.test + '</b> test, <b>' + n.nl + '</b> not a lead</span>';
   }
   function renderLeads() {
     var d = state.data;
     state.keep = {};
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and who has it now (as at the engine's last Rex pull). Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.7.3 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
+    foot.textContent = "HausOS planner v1.8.0 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
@@ -555,17 +560,18 @@
       if (f === "real" && excl(L) && !state.keep[L.lead_id]) return false;
       if (f === "test" && !excl(L) && !state.keep[L.lead_id]) return false;
       if (f === "moved" && !(L.moved && !excl(L)) && !state.keep[L.lead_id]) return false;
+      if (f === "self" && !L.self_created && !state.keep[L.lead_id]) return false;
       if (q && ((L.contact_name || "") + " " + (L.development || "") + " " + (L.source || "") + " " + (L.engine_partner || "") + " " + (L.partner_now || "") + " " + L.lead_id).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     var html = '<div class="sum" id="sum">' + sumHtml() + '</div>';
-    html += '<div class="filters"><select id="lf"><option value="all">All leads</option><option value="real">Real leads only</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="skip">Left alone</option><option value="moved">Moved or changed</option><option value="test">Test / not a lead</option></select>' +
+    html += '<div class="filters"><select id="lf"><option value="all">All leads</option><option value="real">Real leads only</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="skip">Left alone</option><option value="moved">Moved or changed</option><option value="self">Partner\'s own</option><option value="test">Test / not a lead</option></select>' +
             '<input id="lq" type="search" placeholder="Search name, development, partner..." value="' + h(state.lq) + '"><span class="muted">' + rows.length + ' shown</span></div>';
     html += '<div class="wrapl"><table class="leads"><thead><tr><th>When</th><th>Contact</th><th>Development</th><th>Source</th><th>What happened</th><th>Engine &rarr;</th><th>Outcome</th><th>Partner now</th><th></th></tr></thead><tbody>';
     rows.forEach(function (L) { html += rowHtml(L); });
     html += '</tbody></table></div>';
     if (!rows.length) html += '<p class="muted">Nothing matches.</p>';
-    html += '<div class="legend" style="margin-top:8px"><span><i style="background:#ffedd5"></i>Moved from the original partner, or allocated differently from the engine\'s recommendation</span><span><i style="background:#f3f4f6"></i>Test / not a lead (not counted)</span></div>';
+    html += '<div class="legend" style="margin-top:8px"><span><i style="background:#ffedd5"></i>Moved from the original partner, or allocated differently from the engine\'s recommendation</span><span><i style="background:#f3e8ff"></i>Created by the partner who holds it (not counted in their fair share)</span><span><i style="background:#f3f4f6"></i>Test / not a lead (not counted)</span></div>';
     view.innerHTML = html;
     document.getElementById("lf").value = state.lf;
     document.getElementById("lf").onchange = function () { state.lf = this.value; renderLeads(); };

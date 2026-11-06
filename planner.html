@@ -6,7 +6,9 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.4.3 (6 Nov 2026)
+  HausOS partner availability planner v1.4.4 (6 Nov 2026)
+  v1.4.4: the Leads tab uses the full window width (up to 1500px) so the table fits without
+  horizontal scrolling on a laptop; the Planner tab keeps its 980px box (David, 6 Nov).
   v1.4.3: the default filter is "All leads", test leads included and greyed (David, 6 Nov);
   "Real leads only" is the second choice.
   v1.4.2: partner initials in Engine, Outcome and Partner now (full name on hover) so the
@@ -36,6 +38,7 @@
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
   main { max-width:980px; margin:0 auto; padding:20px 12px 60px; }
+  main.wide { max-width:1500px; }
   h1 { font-size:21px; margin:0; }
   .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
   .sub { color:var(--muted); font-size:13px; margin:2px 0 0; }
@@ -88,7 +91,7 @@
   .leads .ini { font-weight:600; letter-spacing:.03em; cursor:help; }
   table.leads { border-collapse:collapse; width:100%; font-size:13px; }
   .leads th { text-align:left; padding:8px 6px; border-bottom:2px solid var(--line); font-weight:600; white-space:nowrap; position:sticky; top:0; background:#fff; z-index:2; }
-  .leads td { padding:6px 6px; border-bottom:1px solid #f1f5f9; vertical-align:middle; white-space:nowrap; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+  .leads td { padding:6px 6px; border-bottom:1px solid #f1f5f9; vertical-align:middle; white-space:nowrap; max-width:260px; overflow:hidden; text-overflow:ellipsis; }
   .leads td.o { white-space:nowrap; } .leads .ico { display:inline-block; width:16px; text-align:center; margin-right:3px; font-weight:700; }
   .leads .ico.ok { color:var(--ok); } .leads .ico.wait { color:#b45309; } .leads .ico.no { color:var(--no); } .leads .ico.dim { color:#9ca3af; }
   .leads td[title], .leads .tag[title] { cursor:help; }
@@ -214,6 +217,7 @@
   function show() {
     tabs.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === state.tab); });
     store("hausos_planner_tab", state.tab);
+    document.querySelector("main").classList.toggle("wide", state.tab === "leads");
     if (state.tab === "leads") renderLeads(); else render();
   }
   tabs.querySelectorAll(".tab").forEach(function (b) { b.onclick = function () { state.tab = b.dataset.tab; history.replaceState(null, "", location.pathname + (state.tab === "leads" ? "#leads" : "")); show(); }; });
@@ -224,7 +228,7 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.4.3 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
+    foot.textContent = "HausOS planner v1.4.4 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') + '</div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
@@ -339,7 +343,7 @@
     state.keep = {};
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a test lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.4.3 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
+    foot.textContent = "HausOS planner v1.4.4 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {

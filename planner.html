@@ -6,7 +6,12 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.6.0 (6 Nov 2026)
+  HausOS partner availability planner v1.7.0 (6 Nov 2026)
+  v1.7.0 (David, 6 Nov: faster load): the Planner tab's counts come from the engine's fair-share
+  cache (API counts -> lead-allocate cached=1, about 0.1 s) on first load, tab switches and after
+  a mark; the Refresh button asks for a live Rex pull (counts {live:true}); the API itself goes
+  live when the cache is older than 30 minutes. A line under the legend says "Counts as at
+  HH:MM (live)" or "(from the last lead at HH:MM)". Allocation is unchanged - always live.
   v1.6.0 (David, 6 Nov): (a) "Not a lead" on the Leads tab beside "Test" - spam, suppliers, not a
   buyer; the lead drops out of fair share, the record and the digest but the contact is left
   alone (API mark_test kind not_a_lead). Each row carries one undo button for whichever mark
@@ -172,7 +177,7 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/partner-availability";
   var SHOW_WEEKS = 8, STEP_WEEKS = 8;
   var view = document.getElementById("view"), sub = document.getElementById("sub"), foot = document.getElementById("foot"), topbtns = document.getElementById("topbtns");
-  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {}, counts: null, refreshed: null };   // away["partner|day"] = true; keep[lead_id] = row toggled since the last full render (stays visible)
+  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, live: false, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {}, counts: null, refreshed: null };   // away["partner|day"] = true; keep[lead_id] = row toggled since the last full render (stays visible)
   var tabs = document.getElementById("tabs");
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -225,7 +230,7 @@
   function refreshAll() {
     if (!state.session) return;
     refbtn.disabled = true; refbtn.textContent = "Refreshing...";
-    state.counts = null; state.leads = null;
+    state.counts = null; state.leads = null; state.live = true;   // v1.7.0: the button asks the engine for a live Rex pull
     reload();
   }
   refbtn.onclick = refreshAll;
@@ -286,11 +291,11 @@
     topbtns.classList.remove("hidden");
     var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
     sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.6.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts at the last refresh.";
+    foot.textContent = "HausOS planner v1.7.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') +
             '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>then in this order (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away today</span></div>';
-    html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '</p>';
+    html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + ' <span id="asat"></span></p>';
     html += '<div class="wrap">' + grid() + '</div>';
     html += '<p style="margin:10px 0 0"><button class="btn ghost sm" id="more">Show further ahead</button> <span class="muted" id="range"></span></p>';
     view.innerHTML = html;
@@ -303,10 +308,18 @@
 
   // ---- lead counts from the engine (v1.5.0)
   function loadCounts() {
-    call({ action: "counts" }).then(function (r) {
+    var live = state.live; state.live = false;
+    call({ action: "counts", live: live }).then(function (r) {
       if (!r.ok) { if (r._status === 401) { signedOut(); return; } markCountsFailed(r.message || r.error); return; }
       state.counts = r; stamp(); if (state.tab === "planner") fillCounts();
     }).catch(function () { markCountsFailed("engine not reachable"); });
+  }
+  // v1.7.0: where the counts came from - the engine's last Rex pull (refreshed at every lead) or a live pull just now.
+  function asAtText(c) {
+    var t = ""; try { t = c.as_at ? new Date(c.as_at).toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }) : ""; } catch (e) {}
+    var sameDay = false; try { sameDay = !!c.as_at && new Date(c.as_at).toLocaleDateString("en-CA", { timeZone: "Europe/London" }) === state.data.today; } catch (e) {}
+    var when = t ? (sameDay ? t : longLabel(new Date(c.as_at).toLocaleDateString("en-CA", { timeZone: "Europe/London" })) + " " + t) : "-";
+    return c.cached ? "Lead counts from the engine's last Rex pull at " + when + " (refreshed at every lead; press Refresh for a live pull)." : "Lead counts pulled live from Rex at " + when + ".";
   }
   function markCountsFailed(msg) {
     document.querySelectorAll("th.st-n").forEach(function (th) { th.textContent = "-"; th.title = "Lead counts unavailable: " + msg; });
@@ -327,6 +340,7 @@
     });
     document.querySelectorAll("th.st-n").forEach(function (th) { var p = byP[th.dataset.p]; seqClass(th); th.textContent = p ? String(p.n) : "-"; th.title = p ? p.name + ": " + p.n + " lead" + (p.n === 1 ? "" : "s") + " in the last 7 days, " + p.days_available + " day" + (p.days_available === 1 ? "" : "s") + " available" + (p.pending ? " (" + p.pending + " awaiting a decision)" : "") : ""; });
     document.querySelectorAll("th.st-r").forEach(function (th) { var p = byP[th.dataset.p]; seqClass(th); th.textContent = p ? Number(p.rate).toFixed(2) : ""; th.title = p ? p.name + ": " + p.n + " / max(" + p.days_available + ", " + (c.day_floor || 2) + ")" : ""; });
+    var asat = document.getElementById("asat"); if (asat) { asat.textContent = asAtText(c); asat.title = c.cached ? "The engine keeps its last pull of the 7-day lead list; marks, planner days and pending proposals are applied live on top of it." : ""; }
     alignHeads();
     document.querySelectorAll("td.cell").forEach(function (td) {
       var day = td.dataset.day; if (days.indexOf(day) < 0) { td.textContent = ""; td.classList.remove("n0"); return; }
@@ -461,7 +475,7 @@
     state.keep = {};
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and where the lead is now. Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.6.0 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day; everything else is live at the last refresh.";
+    foot.textContent = "HausOS planner v1.7.0 (API v" + d.version + "). 'Partner now' comes from the warehouse, refreshed twice a day; everything else is live at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {

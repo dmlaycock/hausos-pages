@@ -6,7 +6,17 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v1.8.1 (6 Nov 2026)
+  HausOS partner availability planner v2.0.0 (24 Nov 2026)
+  v2.0.0 (David, 24 Nov: partner rules). Partners sign in with their Rex email and manage their own
+  availability; everyone sees everyone's, read only. Each day has three slots - 8-12, 12-4, 4-8 -
+  drawn as three segments in the cell (amber = not available; darker amber = beyond the allowance
+  of 6 slots in any 7 days, which starts to reduce that partner's share). "Click changes: Whole day
+  / One slot" (whole day by default for admins, one slot for partners; remembered). A partner can
+  change any of their own slots that has not started; admins any slot from today. Overnight
+  (8pm-8am) is not asked for: the engine treats a partner as available overnight only if they are
+  available in the 4-8 slot before and the 8-12 slot after. "How it works" spells out the rules.
+  Leads tab: a partner sees contact names and Rex links on their own leads only, and has no
+  Test / Not a lead buttons. API v1.7.0 (list returns off slots; toggle takes a slot).
   v1.8.1 (David, 6 Nov): "Repeat?" tag on What happened for a lead keyed in by a Haus user whose
   email or phone matches a contact a partner already owns (engine v0.6.x repeat check; API
   repeat_of / repeat_contacts / repeat_already, lead_report v1.6). Hover names the partner and
@@ -79,7 +89,7 @@
 -->
 <style>
   :root { --ink:#1f2328; --muted:#6b7280; --line:#e5e7eb; --ok:#1a7f37; --no:#b42318; --bg:#fff; --card:#f9fafb;
-          --away:#fcd34d; --away-ink:#78350f; --today:#eef2ff; --locked:#f3f4f6; --wkend:#fafafa; }
+          --away:#fcd34d; --over:#d97706; --away-ink:#78350f; --today:#eef2ff; --locked:#f3f4f6; --wkend:#fafafa; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
   main { max-width:980px; margin:0 auto; padding:20px 12px 60px; }
@@ -114,12 +124,30 @@
   .grid tr.today td { background:var(--today); }
   .grid tr.today td:first-child { font-weight:700; color:var(--ink); }
   .grid tr.month td { background:#fff; color:var(--ink); font-weight:700; text-align:left; padding:10px 8px 4px; border-bottom:1px solid var(--line); }
-  .grid td.cell { cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent; }
-  .grid tr.locked td.cell { cursor:default; }
-  .grid td.cell:not(.abs):hover { outline:2px solid #a7f3d0; outline-offset:-2px; }
-  .grid tr.locked td.cell:hover { outline:none; }
-  .grid td.abs { background:var(--away) !important; color:var(--away-ink); font-size:14px; }
-  .grid td.abs:empty::after { content:"\2022"; }
+  /* v2.0.0: three slot segments per cell (8-12, 12-4, 4-8) with the lead count laid over them */
+  .grid td.cell { position:relative; user-select:none; -webkit-tap-highlight-color:transparent; }
+  .grid td.cell.can { cursor:pointer; }
+  .grid td.cell .sl { position:absolute; top:0; right:0; bottom:0; left:0; display:flex; }
+  .grid td.cell .sl i { flex:1 1 0; display:flex; align-items:center; justify-content:center; font-style:normal; font-size:9px; letter-spacing:0; color:#9ca3af; overflow:hidden; white-space:nowrap; }
+  .grid td.cell .sl i + i { border-left:1px solid rgba(15,23,42,.07); }
+  .grid td.cell .sl i.off { background:var(--away); color:var(--away-ink); }
+  .grid td.cell .sl i.off.over { background:var(--over); color:#fff; }
+  .grid tr.locked td.cell .sl i.off { opacity:.55; }
+  .grid td.cell .n { position:relative; z-index:1; pointer-events:none; }
+  .grid td.cell.has .n { color:var(--away-ink); font-weight:600; }
+  .grid td.mine .sl i.ed::after { content:attr(data-l); }
+  .grid td.cell.cnt .sl i::after { content:none !important; }
+  table.grid.mday td.cell.can:hover { outline:2px solid #34d399; outline-offset:-2px; }
+  table.grid.mslot td.cell .sl i.ed:hover { box-shadow:inset 0 0 0 2px #34d399; }
+  table.grid.mslot td.cell .sl i.ed:hover::after { content:attr(data-l); }
+  .grid th.mine { box-shadow:inset 0 4px 0 #111827; }
+  .grid td.mine { box-shadow:inset 1px 0 0 #cbd5e1, inset -1px 0 0 #cbd5e1; }
+  .mode { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:0 0 8px; }
+  .mode .seg { font:inherit; font-size:13px; padding:5px 11px; border:1px solid #cbd5e1; background:#fff; color:var(--ink); cursor:pointer; }
+  .mode .seg:first-of-type { border-radius:7px 0 0 7px; } .mode .seg:last-of-type { border-radius:0 7px 7px 0; border-left:0; }
+  .mode .seg.on { background:#111827; border-color:#111827; color:#fff; font-weight:600; }
+  details.how { margin:0 0 10px; font-size:13px; } details.how summary { cursor:pointer; font-weight:600; } details.how ul { margin:6px 0 0; padding-left:18px; color:#374151; } details.how li { margin:2px 0; }
+  .mineline { font-size:13px; margin:8px 0 0; } .mineline.over b { color:#b45309; }
   .grid td.cell { font-variant-numeric:tabular-nums; font-size:13px; }
   .grid td.cell.n0 { color:#c7ccd3; }
   .grid tr.locked td.cell, .grid tr.catchup td.cell { color:#374151; }
@@ -145,7 +173,6 @@
   .queue .q { display:inline-block; min-width:40px; text-align:center; padding:4px 8px; border-radius:6px; font-weight:700; letter-spacing:.03em; }
   .queue .q small { display:block; font-size:10px; font-weight:600; opacity:.85; letter-spacing:0; }
   .grid tr.stat th.seq-1 { font-size:14px; }
-  .grid tr.locked td.abs { opacity:.55; }
   .grid tr.catchup td { background:#fffbeb; }
   .grid tr.catchup td:first-child { color:#92400e; }
   .grid td.busy { opacity:.5; }
@@ -190,7 +217,8 @@
     .leads td.c::before, .leads td.when::before, .leads td.act::before { content:""; }
     .leads td.c { font-weight:600; font-size:14px; }
   }
-  @media (max-width:640px) { .grid th:first-child, .grid td:first-child { width:76px; min-width:76px; } .grid th { padding:8px 2px; } }
+  @media (max-width:640px) { .grid th:first-child, .grid td:first-child { width:64px; min-width:64px; } .grid th { padding:8px 2px; } .grid td.day { padding:4px 5px; }
+    table.grid.prole th.mine { width:40%; } .grid td.cell { height:38px; } .grid td.mine .sl i { font-size:10px; } }
 </style>
 </head>
 <body>
@@ -209,7 +237,7 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/partner-availability";
   var SHOW_WEEKS = 8, STEP_WEEKS = 8;
   var view = document.getElementById("view"), sub = document.getElementById("sub"), foot = document.getElementById("foot"), topbtns = document.getElementById("topbtns");
-  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, away: {}, live: false, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {}, counts: null, refreshed: null };   // away["partner|day"] = true; keep[lead_id] = row toggled since the last full render (stays visible)
+  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, off: {}, skew: 0, mode: null, live: false, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {}, counts: null, refreshed: null };   // off["partner|day|slot"] = true (slot 1 = 8-12, 2 = 12-4, 3 = 4-8); keep[lead_id] = row toggled since the last full render (stays visible)
   var tabs = document.getElementById("tabs");
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -238,19 +266,38 @@
   function reload() {
     return call({ action: "list" }).then(function (r) {
       if (!r.ok) { if (r._status === 401) { signedOut(); return; } throw new Error(r.message || r.error); }
-      state.data = r; indexAway(); tabs.classList.remove("hidden"); stamp(); show();
+      state.data = r; indexOff(); tabs.classList.remove("hidden"); stamp(); show();
     }).catch(function (e) { sub.textContent = ""; view.innerHTML = '<div class="card"><b>Could not load the planner.</b><p class="muted">' + h(e.message || e) + '</p><p><button class="btn ghost" onclick="location.reload()">Try again</button></p></div>'; });
   }
-  // Expand absence rows (any length) into a set of partner|day keys for the visible range.
-  function indexAway() {
+  // v2.0.0: the API returns the off slots as "partner|day|slot" keys.
+  var SLOT_START = [8, 12, 16], SLOT_LAB = ["8-12", "12-4", "4-8"];
+  function indexOff() {
     var d = state.data, map = {};
-    d.absences.forEach(function (a) {
-      var end = a.last_day === null ? d.to : (a.last_day < d.to ? a.last_day : d.to);
-      for (var day = (a.first_day < d.from ? d.from : a.first_day); day <= end; day = addDays(day, 1)) map[a.partner_id + "|" + day] = true;
-    });
-    state.away = map;
+    (d.off || []).forEach(function (k) { map[k] = true; });
+    state.off = map;
+    state.skew = d.now ? (Date.parse(d.now) - Date.now()) || 0 : 0;
+    if (!state.mode) state.mode = load("hausos_planner_mode") || (isAdmin() ? "day" : "slot");
   }
-  function isAway(p, day) { return !!state.away[p + "|" + day]; }
+  function isAdmin() { return !!state.data && state.data.user.role === "admin"; }
+  function myId() { return state.data && state.data.user.partner_id ? String(state.data.user.partner_id) : null; }
+  function slotOff(p, day, s) { return !!state.off[p + "|" + day + "|" + s]; }
+  function setOff(p, day, s, off) { var k = p + "|" + day + "|" + s; if (off) state.off[k] = true; else delete state.off[k]; }
+  function offCount(p, day) { return (slotOff(p, day, 1) ? 1 : 0) + (slotOff(p, day, 2) ? 1 : 0) + (slotOff(p, day, 3) ? 1 : 0); }
+  function isAway(p, day) { return offCount(p, day) === 3; }
+  function offIn7(p, day) { var n = 0; for (var i = 0; i < 7; i++) n += offCount(p, addDays(day, -i)); return n; }
+  // London date and hour now, on the server's clock.
+  function londonNow() {
+    var n = new Date(Date.now() + state.skew), day = state.data.today, hour = 12;
+    try { day = n.toLocaleDateString("en-CA", { timeZone: "Europe/London" }); hour = +n.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", hourCycle: "h23" }).slice(0, 2); } catch (e) {}
+    return { day: day, hour: hour };
+  }
+  function started(day, s) { var n = londonNow(); return day < n.day || (day === n.day && n.hour >= SLOT_START[s - 1]); }
+  // Partners: their own slots that have not started. Admins: any slot from today.
+  function canEdit(p, day, s) { var d = state.data; if (isAdmin()) return day >= d.today; return p === myId() && day >= d.today && !started(day, s); }
+  function offText(p, day) {
+    var k = offCount(p, day); if (k === 0) return "available"; if (k === 3) return "not available";
+    return "not available " + [1, 2, 3].filter(function (s) { return slotOff(p, day, s); }).map(function (s) { return SLOT_LAB[s - 1]; }).join(", ");
+  }
 
   // ---- refresh (v1.6.0): one button reloads the planner, the counts and the leads; the time shown is the last successful load.
   var refbtn = document.getElementById("refbtn"), refreshedEl = document.getElementById("refreshed");
@@ -273,7 +320,7 @@
   // ---- sign in
   function signedOut() {
     state.session = null; store("hausos_planner_session", null);
-    topbtns.classList.add("hidden"); tabs.classList.add("hidden"); sub.textContent = "Sign in to see and change partner availability."; foot.textContent = "";
+    topbtns.classList.add("hidden"); tabs.classList.add("hidden"); sub.textContent = "Sign in to see and change partner availability. Partners: use the email address you sign in to Rex with."; foot.textContent = "";
     view.innerHTML = '<div class="card signin"><label for="email">Your email address</label><input id="email" type="email" autocomplete="email" placeholder="name@hausproperties.com">' +
       '<p class="err" id="err"></p><p><button class="btn" id="go">Email me a sign-in link</button></p>' +
       '<p class="muted">The link works once and expires in 30 minutes. After that you stay signed in on this device for 30 days.</p></div>';
@@ -319,24 +366,73 @@
 
   // ---- render
   function render() {
-    var d = state.data;
+    var d = state.data, admin = isAdmin(), allow = d.allowance || 6;
     topbtns.classList.remove("hidden");
-    var catchUp = !!d.catch_up_until && (d.edit_from || d.today) < d.today;
-    sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Click a day to mark a partner not available; click again to make them available. " + (catchUp ? "Catch-up: the last 7 days are open until " + longLabel(d.catch_up_until) + " - please fill in any days partners were away, so the engine counts them." : "The last 7 days are locked.");
-    foot.textContent = "HausOS planner v1.8.1 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
-    var html = '<div class="card"><div class="strip">' + stripHtml() + '</div></div>';
-    html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' + (catchUp ? '<span><i style="background:#fffbeb"></i>Catch-up (last 7 days, editable)</span>' : '') +
-            '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>2nd, 4th... = which lead they get next if nothing changes (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away today</span></div>';
+    sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Each day has three slots: 8-12, 12-4 and 4-8. " +
+      (admin ? "Click to mark a partner not available; click again to make them available. Past days are locked."
+             : (myId() ? "Your column is the one with the dark bar. Click a slot to mark yourself not available; click again to undo. Slots that have started are locked, and everyone else's columns are read only."
+                       : "You can see everyone's availability; your address is not linked to a partner, so nothing can be changed here."));
+    foot.textContent = "HausOS planner v2.0.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
+    var html = '<div class="card"><div class="strip">' + stripHtml() + '</div><p class="mineline" id="mineline"></p></div>';
+    html += '<details class="how"><summary>How it works</summary><ul>' +
+      '<li>You only get leads while you are available. A slot marked not available means no leads in that slot.</li>' +
+      '<li>Up to ' + allow + ' slots (two days) off in any 7 days do not affect your share of leads. Beyond that, each further slot reduces it a little (a third of a day) - those slots show in darker amber.</li>' +
+      '<li>Leads are allocated around the clock. Overnight (8pm to 8am) you are treated as available only if you are available in the 4-8 slot before and the 8-12 slot after, so there is nothing to fill in for the night.</li>' +
+      '<li>There is no expectation to follow up outside 8am to 8pm. Within those hours, follow up within 4 working hours - an update on the lead in Rex counts as the follow-up.</li>' +
+      '<li>You can change any slot that has not started yet. Past slots are locked, so the record of who was available stays as it was.</li>' +
+      '<li>Everyone can see everyone\'s availability and the lead counts. The Leads tab shows every lead and where it went; names show on your own leads only.</li></ul></details>';
+    html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available (each cell: 8-12 | 12-4 | 4-8)</span><span><i style="background:var(--over)"></i>Beyond ' + allow + ' slots in 7 days - reduces share</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' +
+            '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>2nd, 4th... = which lead they get next if nothing changes (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away now</span></div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '<span id="asat" style="display:block;margin-top:2px"></span></p>';
     html += '<div class="queue" id="queue"></div>';
+    if (admin || myId()) html += '<div class="mode" id="mode"><span>Click changes:</span><button class="seg" data-m="day">Whole day</button><button class="seg" data-m="slot">One slot</button></div>';
     html += '<div class="wrap">' + grid() + '</div>';
     html += '<p style="margin:10px 0 0"><button class="btn ghost sm" id="more">Show further ahead</button> <span class="muted" id="range"></span></p>';
     view.innerHTML = html;
     document.getElementById("range").textContent = "Showing " + longLabel(d.from) + " to " + longLabel(visibleTo()) + ".";
     document.getElementById("more").onclick = function () { state.showWeeks += STEP_WEEKS; render(); };
-    bind(); alignHeads();
+    paintAll(); setMode(state.mode); bind(); alignHeads();
     if (state.counts) fillCounts(); else loadCounts();
     var today = document.querySelector("tr.today"), wrap = document.querySelector(".wrap"); if (today && wrap) wrap.scrollTop = Math.max(0, today.offsetTop - wrap.clientHeight / 3);
+  }
+  function setMode(m) {
+    state.mode = m === "slot" ? "slot" : "day"; store("hausos_planner_mode", state.mode);
+    var tbl = document.querySelector("table.grid"); if (tbl) { tbl.classList.toggle("mday", state.mode === "day"); tbl.classList.toggle("mslot", state.mode === "slot"); }
+    document.querySelectorAll("#mode .seg").forEach(function (b) { b.classList.toggle("on", b.dataset.m === state.mode); b.onclick = function () { setMode(b.dataset.m); }; });
+  }
+  // Slot colours, what can be clicked, and the hover text for one cell.
+  function paintCell(td) {
+    var p = td.dataset.p, day = td.dataset.day, allow = state.data.allowance || 6, over = offIn7(p, day) > allow, any = false, can = false;
+    td.querySelectorAll(".sl i").forEach(function (i) {
+      var s = +i.dataset.s, off = slotOff(p, day, s), ed = canEdit(p, day, s);
+      if (off) any = true; if (ed) can = true;
+      i.className = ((off ? "off" + (over ? " over" : "") : "") + (ed ? " ed" : "")).trim();
+    });
+    td.classList.toggle("has", any); td.classList.toggle("can", can); cellTitle(td);
+  }
+  function cellTitle(td) {
+    var p = td.dataset.p, day = td.dataset.day, c = state.counts, name = td.dataset.name || "", t = name + " " + longLabel(day) + ": " + offText(p, day);
+    if (c && (c.days || []).indexOf(day) >= 0) { var cp = c.partners.filter(function (x) { return x.partner_id === p; })[0], n = cp ? (cp.by_day[day] || 0) : 0; t += "; " + n + " lead" + (n === 1 ? "" : "s"); }
+    if (offCount(p, day) && offIn7(p, day) > (state.data.allowance || 6)) t += " (beyond the allowance: " + offIn7(p, day) + " slots off in the 7 days to this day)";
+    td.title = t;
+  }
+  function paintAll() { document.querySelectorAll("td.cell").forEach(paintCell); mineLine(); }
+  // After a change: the day itself and the six days after it (their 7-day totals include it), the strip and the allowance line.
+  function repaint(p, day) {
+    var to = addDays(day, 6);
+    document.querySelectorAll('td.cell[data-p="' + p + '"]').forEach(function (td) { if (td.dataset.day >= day && td.dataset.day <= to) paintCell(td); });
+    var strip = document.querySelector(".strip"); if (strip) strip.innerHTML = stripHtml();
+    mineLine();
+  }
+  // A partner's own running total against the allowance.
+  function mineLine() {
+    var el = document.getElementById("mineline"), d = state.data, me = myId(); if (!el) return;
+    if (isAdmin() || !me) { el.textContent = ""; el.classList.add("hidden"); return; }
+    var allow = d.allowance || 6, now = offIn7(me, d.today), peak = now, peakDay = d.today;
+    for (var i = 1; i <= 28; i++) { var day = addDays(d.today, i), n = offIn7(me, day); if (n > peak) { peak = n; peakDay = day; } }
+    el.classList.toggle("over", peak > allow);
+    el.innerHTML = "Your slots off in the 7 days to today: <b>" + now + "</b> of " + allow + " allowed without affecting your share." +
+      (peak > now ? " With what you have planned, the most in any 7 days is <b>" + peak + "</b> (week to " + h(longLabel(peakDay)) + ")" + (peak > allow ? " - " + (peak - allow) + " beyond the allowance, so your share dips slightly that week." : ".") : (now > allow ? " That is " + (now - allow) + " beyond the allowance, so your share is slightly reduced for now." : ""));
   }
 
   // ---- lead counts from the engine (v1.5.0)
@@ -374,7 +470,7 @@
       var p = byP[th.dataset.p], sm = th.querySelector("small"); seqClass(th);
       var f = p ? first[p.partner_id] : undefined;
       if (sm) sm.textContent = p ? (p.available ? (f ? ordinal(f) : "later") : "away") : "";
-      th.title = p ? p.name + (p.available ? (f === 1 ? " - due the next lead" : f ? " - gets the " + ordinal(f) + " lead from now, if nothing changes" : " - not in the next " + q.length + " leads") : " - away today, not in the running") : th.title;
+      th.title = p ? p.name + (p.available ? (f === 1 ? " - due the next lead" : f ? " - gets the " + ordinal(f) + " lead from now, if nothing changes" : " - not in the next " + q.length + " leads") : " - away now, not in the running") : th.title;
     });
     var qel = document.getElementById("queue");
     if (qel) {
@@ -382,15 +478,16 @@
       qel.innerHTML = '<span class="muted">If nothing changes, the next ' + q.length + ' fair-share leads go:</span>' + q.map(function (id, i) { var p = byP[id]; return '<span class="q grid-th ' + (cls[Math.min(shade[id], 7)] || "seq-7") + '" title="' + h(p.name) + ' - lead ' + (i + 1) + '">' + h(initials(p.name)) + '<small>' + (i + 1) + '</small></span>'; }).join("") +
         '<span class="muted" title="Lowest leads per available day gets the lead; a tie goes to whoever has waited longest. Leads an existing contact owner or a partner ID claims skip the queue.">(engine rule replayed from the counts above)</span>';
     }
-    document.querySelectorAll("th.st-n").forEach(function (th) { var p = byP[th.dataset.p]; seqClass(th); th.textContent = p ? String(p.n) : "-"; th.title = p ? p.name + ": " + p.n + " lead" + (p.n === 1 ? "" : "s") + " in the last 7 days, " + p.days_available + " day" + (p.days_available === 1 ? "" : "s") + " available" + (p.pending ? " (" + p.pending + " awaiting a decision)" : "") : ""; });
+    document.querySelectorAll("th.st-n").forEach(function (th) { var p = byP[th.dataset.p]; seqClass(th); th.textContent = p ? String(p.n) : "-"; th.title = p ? p.name + ": " + p.n + " lead" + (p.n === 1 ? "" : "s") + " in the last 7 days, " + p.days_available + " day" + (p.days_available === 1 ? "" : "s") + " counted as available" + (p.slots_off ? " (" + p.slots_off + " slot" + (p.slots_off === 1 ? "" : "s") + " off)" : "") + (p.pending ? " (" + p.pending + " awaiting a decision)" : "") : ""; });
     document.querySelectorAll("th.st-r").forEach(function (th) { var p = byP[th.dataset.p]; seqClass(th); th.textContent = p ? Number(p.rate).toFixed(2) : ""; th.title = p ? p.name + ": " + p.n + " / max(" + p.days_available + ", " + (c.day_floor || 2) + ")" : ""; });
     var asat = document.getElementById("asat"); if (asat) { asat.textContent = asAtText(c); asat.title = c.cached ? "The engine keeps its last pull of the 7-day lead list; marks, planner days and pending proposals are applied live on top of it." : ""; }
     alignHeads();
     document.querySelectorAll("td.cell").forEach(function (td) {
-      var day = td.dataset.day; if (days.indexOf(day) < 0) { td.textContent = ""; td.classList.remove("n0"); return; }
+      var day = td.dataset.day, el = td.querySelector(".n"); if (!el) return;
+      if (days.indexOf(day) < 0) { el.textContent = ""; td.classList.remove("n0", "cnt"); return; }
       var p = byP[td.dataset.p], n = p ? (p.by_day[day] || 0) : 0;
-      td.textContent = n ? String(n) : "\u00b7"; td.classList.toggle("n0", !n);
-      td.title = (p ? p.name : "") + " " + longLabel(day) + ": " + n + " lead" + (n === 1 ? "" : "s") + (td.classList.contains("abs") ? ", not available" : "");
+      el.textContent = n ? String(n) : "\u00b7"; td.classList.toggle("n0", !n); td.classList.add("cnt");
+      cellTitle(td);
     });
   }
   // The three header rows are sticky; the second and third sit below the measured height of the first (it grew in v1.6.0).
@@ -414,36 +511,41 @@
   }
   function visibleTo() { var t = addDays(state.data.today, state.showWeeks * 7); return t < state.data.to ? t : state.data.to; }
 
-  // Runs of consecutive not-available days per partner, from today, for the strip.
+  // Who is off in the next 7 days, by slot: "Amy: Wed 25 to Fri 27; Sat 28 8-12".
   function stripHtml() {
     var d = state.data, end = addDays(d.today, 6), out = [];
     d.partners.forEach(function (p) {
-      var first = null;
-      for (var day = d.today; day <= end; day = addDays(day, 1)) if (isAway(p.partner_id, day)) { first = day; break; }
-      if (!first) return;
-      var last = first; while (isAway(p.partner_id, addDays(last, 1))) last = addDays(last, 1);
-      var txt = p.full_name.split(" ")[0] + ": " + (first === d.today ? "away" : "away from " + label(first)) + (last >= d.to ? "" : ", back " + label(addDays(last, 1)));
-      out.push('<span class="chip">' + h(txt) + '</span>');
+      var bits = [], run = null;
+      function flush() { if (run) { bits.push(run.a === run.b ? label(run.a) : label(run.a) + " to " + label(run.b)); run = null; } }
+      for (var day = d.today; day <= end; day = addDays(day, 1)) {
+        var k = offCount(p.partner_id, day);
+        if (k === 3) { if (run) run.b = day; else run = { a: day, b: day }; continue; }
+        flush();
+        if (k) bits.push(label(day) + " " + [1, 2, 3].filter(function (s) { return slotOff(p.partner_id, day, s); }).map(function (s) { return SLOT_LAB[s - 1]; }).join(", "));
+      }
+      flush();
+      if (bits.length) out.push('<span class="chip">' + h(p.full_name.split(" ")[0] + ": " + bits.join("; ")) + '</span>');
     });
-    return '<b style="font-size:13px">Not available this week:</b>' + (out.length ? out.join("") : '<span class="chip none">Everyone is available</span>');
+    return '<b style="font-size:13px">Not available in the next 7 days:</b>' + (out.length ? out.join("") : '<span class="chip none">Everyone is available</span>');
   }
 
   function grid() {
-    var d = state.data, to = visibleTo(), rows = [], lastMonth = "";
-    var head = '<tr class="head"><th>Day</th>' + d.partners.map(function (p) { return '<th class="st-p" data-p="' + h(p.partner_id) + '" title="' + h(p.full_name) + '">' + h(initials(p.full_name)) + '<small></small></th>'; }).join("") + '</tr>';
+    var d = state.data, to = visibleTo(), rows = [], lastMonth = "", me = isAdmin() ? null : myId();
+    var head = '<tr class="head"><th>Day</th>' + d.partners.map(function (p) { return '<th class="st-p' + (p.partner_id === me ? " mine" : "") + '" data-p="' + h(p.partner_id) + '" title="' + h(p.full_name) + '">' + h(initials(p.full_name)) + '<small></small></th>'; }).join("") + '</tr>';
     head += '<tr class="stat"><th title="Leads received in the last 7 days, today included - the engine\'s own count (self-created and test leads excluded, pending proposals included)">L7D</th>' + d.partners.map(function (p) { return '<th class="st-n" data-p="' + h(p.partner_id) + '">' + (state.counts ? "" : "&hellip;") + '</th>'; }).join("") + '</tr>';
-    head += '<tr class="stat2"><th title="L7D divided by days available in the last 7 (minimum 2) - the rate the engine ranks on; lowest gets the next lead">per day</th>' + d.partners.map(function (p) { return '<th class="st-r" data-p="' + h(p.partner_id) + '"></th>'; }).join("") + '</tr>';
+    head += '<tr class="stat2"><th title="L7D divided by the days counted as available in the last 7 (minimum 2; up to 6 slots off do not reduce it) - the rate the engine ranks on; lowest gets the next lead">per day</th>' + d.partners.map(function (p) { return '<th class="st-r" data-p="' + h(p.partner_id) + '"></th>'; }).join("") + '</tr>';
     for (var day = d.from; day <= to; day = addDays(day, 1)) {
       var m = monthLabel(day);
       if (m !== lastMonth) { rows.push('<tr class="month"><td colspan="' + (d.partners.length + 1) + '">' + h(m) + '</td></tr>'); lastMonth = m; }
-      var editFrom = d.edit_from || d.today, locked = day < editFrom, catchup = !locked && day < d.today;
-      var cls = (locked ? "locked " : "") + (catchup ? "catchup " : "") + (day === d.today ? "today " : "") + (isWeekend(day) ? "wkend" : "");
+      var locked = day < d.today;
+      var cls = (locked ? "locked " : "") + (day === d.today ? "today " : "") + (isWeekend(day) ? "wkend" : "");
       var cells = d.partners.map(function (p) {
-        return '<td class="cell' + (isAway(p.partner_id, day) ? " abs" : "") + '" data-day="' + day + '" data-p="' + h(p.partner_id) + '" title="' + h(p.full_name + " " + longLabel(day)) + '"></td>';
+        return '<td class="cell' + (p.partner_id === me ? " mine" : "") + '" data-day="' + day + '" data-p="' + h(p.partner_id) + '" data-name="' + h(p.full_name) + '">' +
+          '<div class="sl"><i data-s="1" data-l="8-12"></i><i data-s="2" data-l="12-4"></i><i data-s="3" data-l="4-8"></i></div><span class="n"></span></td>';
       }).join("");
       rows.push('<tr class="' + cls.trim() + '"><td class="day">' + h(label(day)) + '</td>' + cells + '</tr>');
     }
-    return '<table class="grid">' + head + rows.join("") + '</table>';
+    return '<table class="grid' + (me ? " prole" : "") + '">' + head + rows.join("") + '</table>';
   }
 
   // ---- Leads tab (v1.4.0)
@@ -523,6 +625,7 @@
   function ini(name) { return name ? '<span class="ini" title="' + h(name) + '">' + h(initials(name)) + '</span>' : "-"; }
   function excl(L) { return L.exclusion || (L.is_test ? "test" : null); }
   function actHtml(L) {
+    if (!isAdmin()) return "";
     var x = excl(L);
     if (x === "not_a_lead") return '<button class="tbtn on" data-id="' + h(L.lead_id) + '" data-k="undo">Not a lead - undo</button>';
     if (x) return '<button class="tbtn on" data-id="' + h(L.lead_id) + '" data-k="undo">Test - undo</button>';
@@ -536,7 +639,8 @@
     var nowTitle = (L.self_created ? "Created by " + (L.partner_now || "the partner") + " themselves - not counted in their fair share" : L.moved ? "Moved: first with " + (L.partner_first || "-") + ", now with " + (L.partner_now || "-") + (L.engine_partner && L.step !== "skip" ? " (engine proposed " + L.engine_partner + ")" : "") : (L.partner_now || "")) + asAt;
     return '<tr class="' + cls.trim() + '" data-id="' + h(L.lead_id) + '">' +
       '<td class="when" data-l="When">' + h(whenLabel(L.received_at)) + '</td>' +
-      '<td class="c" data-l="Contact" title="' + h(L.contact_name || "") + '"><a href="' + h(L.rex_url) + '" target="_blank" rel="noopener">' + h(L.contact_name || ("lead " + L.lead_id)) + '</a></td>' +
+      (L.masked ? '<td class="c" data-l="Contact" title="Names show on your own leads only"><span class="muted">' + h(L.partner_now ? initials(L.partner_now) + "'s lead" : "another lead") + '</span></td>'
+                : '<td class="c" data-l="Contact" title="' + h(L.contact_name || "") + '"><a href="' + h(L.rex_url) + '" target="_blank" rel="noopener">' + h(L.contact_name || ("lead " + L.lead_id)) + '</a></td>') +
       '<td data-l="Development" title="' + h(L.development || "") + '">' + h(L.development || "-") + '</td>' +
       '<td data-l="Source">' + h(L.source || "-") + '</td>' +
       '<td data-l="What happened">' + routeTag(L).replace("<span", '<span title="' + h(L.route) + '"') + repeatTag(L) + '</td>' +
@@ -560,8 +664,9 @@
     var d = state.data;
     state.keep = {};
     topbtns.classList.remove("hidden");
-    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and who has it now (as at the engine's last Rex pull). Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest.";
-    foot.textContent = "HausOS planner v1.8.1 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
+    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and who has it now (as at the engine's last Rex pull). " +
+      (isAdmin() ? "Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest." : "Contact names and Rex links show on your own leads only; other leads show the development, source and where they went.");
+    foot.textContent = "HausOS planner v2.0.0 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
@@ -615,31 +720,28 @@
     };
   }
 
-  // ---- one click = toggle (optimistic; reverts if the API says no)
+  // ---- one click = toggle a slot or a whole day (optimistic; the API's answer is then applied as the truth)
   function bind() {
-    document.querySelectorAll("td.cell").forEach(function (td) {
-      td.onclick = function () {
-        if (td.parentNode.classList.contains("locked") || td.classList.contains("busy")) return;
-        var p = td.dataset.p, day = td.dataset.day, key = p + "|" + day, was = !!state.away[key];
-        if (was) delete state.away[key]; else state.away[key] = true;
-        td.classList.toggle("abs", !was); td.classList.add("busy");
-        var strip = document.querySelector(".strip"); if (strip) strip.innerHTML = stripHtml();
-        call({ action: "toggle", partner_id: p, day: day }).then(function (r) {
-          td.classList.remove("busy");
-          if (r.ok && state.counts && (state.counts.days || []).indexOf(day) >= 0) { state.counts = null; loadCounts(); }
-          if (!r.ok) {
-            if (was) state.away[key] = true; else delete state.away[key];
-            td.classList.toggle("abs", was); if (strip) strip.innerHTML = stripHtml();
-            toast(r.message || r.error || "Not saved"); if (r._status === 401) signedOut();
-          }
-        }).catch(function () {
-          td.classList.remove("busy");
-          if (was) state.away[key] = true; else delete state.away[key];
-          td.classList.toggle("abs", was); if (strip) strip.innerHTML = stripHtml();
-          toast("Could not reach HausOS - not saved");
-        });
-      };
-    });
+    var tbl = document.querySelector("table.grid"); if (!tbl) return;
+    tbl.onclick = function (ev) {
+      var td = ev.target.closest ? ev.target.closest("td.cell") : null; if (!td || td.classList.contains("busy")) return;
+      var p = td.dataset.p, day = td.dataset.day, d = state.data;
+      if (!isAdmin() && p !== myId()) return;
+      if (day < d.today) return;
+      var seg = ev.target.closest(".sl i"), slot = state.mode === "slot" && seg ? +seg.dataset.s : 0;
+      var slots = (slot ? [slot] : [1, 2, 3]).filter(function (s) { return canEdit(p, day, s); });
+      if (!slots.length) { toast(slot ? "That slot has already started, so it is locked." : "Today's slots have all started, so they are locked."); return; }
+      var makeOff = !slots.every(function (s) { return slotOff(p, day, s); });
+      var before = [1, 2, 3].map(function (s) { return slotOff(p, day, s); });
+      function settle(arr) { [1, 2, 3].forEach(function (s, i) { setOff(p, day, s, !!arr[i]); }); td.classList.remove("busy"); repaint(p, day); }
+      slots.forEach(function (s) { setOff(p, day, s, makeOff); });
+      td.classList.add("busy"); repaint(p, day);
+      call({ action: "toggle", partner_id: p, day: day, slot: slot, off: makeOff }).then(function (r) {
+        if (!r.ok) { settle(before); toast(r.message || r.error || "Not saved"); if (r._status === 401) signedOut(); return; }
+        settle(r.off || before);
+        if (state.counts && (state.counts.days || []).indexOf(day) >= 0) { state.counts = null; loadCounts(); }
+      }).catch(function () { settle(before); toast("Could not reach HausOS - not saved"); });
+    };
   }
 
   document.getElementById("outbtn").onclick = function () { call({ action: "logout" }).catch(function () {}).then(signedOut); };

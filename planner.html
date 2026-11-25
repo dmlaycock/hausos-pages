@@ -6,7 +6,14 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v2.0.0 (24 Nov 2026)
+  HausOS partner availability planner v2.1.0 (25 Nov 2026)
+  v2.1.0 (David, 25 Nov: partner rule 4 - follow up within 4 working hours). Leads tab: a "Follow-up"
+  column per lead - the core hours (8am-8pm, 7 days) from allocation to the partner's first activity
+  on the lead or its contact in Rex: green tick within 4 hours, amber "late", grey "waiting", red
+  "overdue" (nothing seen and 4 core hours have passed). A summary table above the list: per partner
+  leads, within 4 h, late, waiting, overdue, median hours (admins see every partner; a partner sees
+  their own row and the team's). Filters "Follow-up overdue" and "Follow-up late". All of it is as
+  at the last Rex load (twice a day), shown beside the table. API v1.8.0 (ops.lead_followup).
   v2.0.0 (David, 24 Nov: partner rules). Partners sign in with their Rex email and manage their own
   availability; everyone sees everyone's, read only. Each day has three slots - 8-12, 12-4, 4-8 -
   drawn as three segments in the cell (amber = not available; darker amber = beyond the allowance
@@ -204,6 +211,13 @@
   .leads .tag.rel { background:#fef3c7; color:#92400e; } .leads .tag.skip { background:#f3f4f6; color:#6b7280; } .leads .tag.dir { background:#ecfeff; color:#155e75; } .leads .tag.test { background:#fee2e2; color:#991b1b; }
   .leads .tag.rep { background:#fef3c7; color:#92400e; border:1px solid #f59e0b; font-weight:600; margin-left:4px; } .leads .tag.rep.ok { background:#f0fdf4; color:#166534; border-color:#86efac; font-weight:500; }
   .leads a { color:#1a56db; }
+  .leads .fu { font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .leads .fu.met { color:var(--ok); } .leads .fu.late { color:#b45309; } .leads .fu.waiting { color:#6b7280; } .leads .fu.overdue { color:var(--no); font-weight:700; }
+  table.futab { border-collapse:collapse; font-size:13px; margin:0 0 4px; }
+  .futab th { text-align:right; padding:4px 10px; border-bottom:2px solid var(--line); font-weight:600; white-space:nowrap; color:#444; } .futab th:first-child, .futab td:first-child { text-align:left; padding-left:0; }
+  .futab td { text-align:right; padding:4px 10px; border-bottom:1px solid #f1f5f9; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .futab tr.team td { font-weight:600; border-top:2px solid var(--line); } .futab td.bad { color:var(--no); font-weight:700; } .futab td.warn { color:#b45309; }
+  .fuwrap { overflow:auto; margin:0 0 10px; }
   .tbtn { font:inherit; font-size:12px; padding:4px 8px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; white-space:nowrap; }
   .tbtn.on { background:#fee2e2; border-color:#fecaca; color:#991b1b; }
   .wrapl { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:72vh; }
@@ -237,7 +251,7 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/partner-availability";
   var SHOW_WEEKS = 8, STEP_WEEKS = 8;
   var view = document.getElementById("view"), sub = document.getElementById("sub"), foot = document.getElementById("foot"), topbtns = document.getElementById("topbtns");
-  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, off: {}, skew: 0, mode: null, live: false, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, lf: "all", lq: "", keep: {}, counts: null, refreshed: null };   // off["partner|day|slot"] = true (slot 1 = 8-12, 2 = 12-4, 3 = 4-8); keep[lead_id] = row toggled since the last full render (stays visible)
+  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, off: {}, skew: 0, mode: null, live: false, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, followup: null, lf: "all", lq: "", keep: {}, counts: null, refreshed: null };   // off["partner|day|slot"] = true (slot 1 = 8-12, 2 = 12-4, 3 = 4-8); keep[lead_id] = row toggled since the last full render (stays visible)
   var tabs = document.getElementById("tabs");
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -372,13 +386,13 @@
       (admin ? "Click to mark a partner not available; click again to make them available. Past days are locked."
              : (myId() ? "Your column is the one with the dark bar. Click a slot to mark yourself not available; click again to undo. Slots that have started are locked, and everyone else's columns are read only."
                        : "You can see everyone's availability; your address is not linked to a partner, so nothing can be changed here."));
-    foot.textContent = "HausOS planner v2.0.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
+    foot.textContent = "HausOS planner v2.1.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div><p class="mineline" id="mineline"></p></div>';
     html += '<details class="how"><summary>How it works</summary><ul>' +
       '<li>You only get leads while you are available. A slot marked not available means no leads in that slot.</li>' +
       '<li>Up to ' + allow + ' slots (two days) off in any 7 days do not affect your share of leads. Beyond that, each further slot reduces it a little (a third of a day) - those slots show in darker amber.</li>' +
       '<li>Leads are allocated around the clock. Overnight (8pm to 8am) you are treated as available only if you are available in the 4-8 slot before and the 8-12 slot after, so there is nothing to fill in for the night.</li>' +
-      '<li>There is no expectation to follow up outside 8am to 8pm. Within those hours, follow up within 4 working hours - an update on the lead in Rex counts as the follow-up.</li>' +
+      '<li>There is no expectation to follow up outside 8am to 8pm. Within those hours, follow up within 4 working hours - an update on the lead in Rex counts as the follow-up (a note, call, SMS, email, reminder, appointment or processing the lead). The Leads tab shows the time taken on each of your leads.</li>' +
       '<li>You can change any slot that has not started yet. Past slots are locked, so the record of who was available stays as it was.</li>' +
       '<li>Everyone can see everyone\'s availability and the lead counts. The Leads tab shows every lead and where it went; names show on your own leads only.</li></ul></details>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available (each cell: 8-12 | 12-4 | 4-8)</span><span><i style="background:var(--over)"></i>Beyond ' + allow + ' slots in 7 days - reduces share</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' +
@@ -619,8 +633,30 @@
   function loadLeads() {
     return call({ action: "leads", days: 14 }).then(function (r) {
       if (!r.ok) { if (r._status === 401) { signedOut(); return; } throw new Error(r.message || r.error); }
-      state.leads = r.leads; stamp(); renderLeads();
+      state.leads = r.leads; state.followup = r.followup || null; stamp(); renderLeads();
     }).catch(function (e) { view.innerHTML = '<div class="card"><b>Could not load the leads.</b><p class="muted">' + h(e.message || e) + '</p></div>'; });
+  }
+  // v2.1.0: follow-up (rule 4). Hours are core hours, 8am-8pm, from allocation to the partner's first activity in Rex.
+  function hrs(x) { var n = Number(x) || 0; return n >= 10 ? Math.round(n) + "h" : (Math.round(n * 10) / 10) + "h"; }
+  function fuHtml(L) {
+    if (!L.fu_state) return { html: '<span class="muted">-</span>', title: L.masked ? "Shown on your own leads only" : "Not measured: the lead is not with a partner, was created by the partner, or is a test / not a lead" };
+    var who = L.fu_partner || "the partner", alloc = L.fu_alloc_at ? whenLabel(L.fu_alloc_at) : "-", st = L.fu_state, txt, title;
+    if (st === "met") { txt = "✓ " + hrs(L.fu_hours); title = "Followed up within the target: " + (L.fu_kind || "activity") + " by " + who + " at " + whenLabel(L.fu_at) + ", " + hrs(L.fu_hours).replace("h", "") + " core hours after allocation (" + alloc + ")"; }
+    else if (st === "late") { txt = "late " + hrs(L.fu_hours); title = "Followed up after the target: " + (L.fu_kind || "activity") + " by " + who + " at " + whenLabel(L.fu_at) + ", " + hrs(L.fu_hours).replace("h", "") + " core hours after allocation (" + alloc + ")"; }
+    else if (st === "overdue") { txt = "overdue " + hrs(L.fu_hours); title = "No activity by " + who + " in Rex as at the last load, " + hrs(L.fu_hours).replace("h", "") + " core hours after allocation (" + alloc + ")"; }
+    else { txt = "waiting"; title = "No activity by " + who + " seen yet; " + hrs(L.fu_hours).replace("h", "") + " core hours since allocation (" + alloc + ") as at the last Rex load"; }
+    return { html: '<span class="fu ' + st + '">' + h(txt) + '</span>', title: title };
+  }
+  function followupHtml() {
+    var f = state.followup; if (!f || !f.team || !f.team.leads) return "";
+    var target = f.target_hours || 4, asat = f.as_at ? whenLabel(f.as_at) : "-";
+    function row(x, cls) {
+      var done = x.met + x.late, pct = done ? Math.round(100 * x.met / done) + "%" : "-";
+      return '<tr class="' + (cls || "") + '"><td>' + h(x.name) + '</td><td>' + x.leads + '</td><td>' + x.met + '</td><td class="' + (x.late ? "warn" : "") + '">' + x.late + '</td><td>' + x.waiting + '</td><td class="' + (x.overdue ? "bad" : "") + '">' + x.overdue + '</td><td>' + pct + '</td><td>' + (x.median_hours == null ? "-" : hrs(x.median_hours)) + '</td></tr>';
+    }
+    return '<div class="fuwrap"><table class="futab"><tr><th>Follow-up (last 14 days)</th><th>Leads</th><th>Within ' + target + ' h</th><th>Late</th><th>Waiting</th><th>Overdue</th><th title="Of the leads followed up, the share inside the target">Within target</th><th title="Median core hours from allocation to first activity, for leads followed up">Median</th></tr>' +
+      f.partners.map(function (x) { return row(x); }).join("") + row(f.team, "team") + '</table>' +
+      '<span class="muted">Core hours (8am to 8pm, every day) from allocation to the first activity on the lead or its contact in Rex. As at the last Rex load, ' + h(asat) + ' - activity since then is not shown yet.</span></div>';
   }
   function ini(name) { return name ? '<span class="ini" title="' + h(name) + '">' + h(initials(name)) + '</span>' : "-"; }
   function excl(L) { return L.exclusion || (L.is_test ? "test" : null); }
@@ -646,6 +682,7 @@
       '<td data-l="What happened">' + routeTag(L).replace("<span", '<span title="' + h(L.route) + '"') + repeatTag(L) + '</td>' +
       '<td data-l="Engine">' + ini(L.step === "skip" ? "" : L.engine_partner) + '</td>' +
       '<td class="o" data-l="Outcome" title="' + h(oc.full) + '">' + oc.html + '</td>' +
+      (function () { var f = fuHtml(L); return '<td data-l="Follow-up" title="' + h(f.title) + '">' + f.html + '</td>'; })() +
       '<td data-l="Partner now" title="' + h(nowTitle) + '">' + ini(L.partner_now) + (L.moved ? ' <span class="ico wait" title="' + h(nowTitle) + '">\u21B7</span>' : "") + '</td>' +
       '<td class="act">' + actHtml(L) + '</td></tr>';
   }
@@ -666,7 +703,7 @@
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and who has it now (as at the engine's last Rex pull). " +
       (isAdmin() ? "Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest." : "Contact names and Rex links show on your own leads only; other leads show the development, source and where they went.");
-    foot.textContent = "HausOS planner v2.0.0 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
+    foot.textContent = "HausOS planner v2.1.0 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
@@ -679,13 +716,15 @@
       if (f === "test" && !excl(L) && !state.keep[L.lead_id]) return false;
       if (f === "moved" && !(L.moved && !excl(L)) && !state.keep[L.lead_id]) return false;
       if (f === "self" && !L.self_created && !state.keep[L.lead_id]) return false;
+      if (f === "fu_overdue" && L.fu_state !== "overdue") return false;
+      if (f === "fu_late" && L.fu_state !== "late") return false;
       if (q && ((L.contact_name || "") + " " + (L.development || "") + " " + (L.source || "") + " " + (L.engine_partner || "") + " " + (L.partner_now || "") + " " + L.lead_id).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
-    var html = '<div class="sum" id="sum">' + sumHtml() + '</div>';
-    html += '<div class="filters"><select id="lf"><option value="all">All leads</option><option value="real">Real leads only</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="repeat">Repeat enquiries</option><option value="skip">Left alone</option><option value="moved">Moved or changed</option><option value="self">Partner\'s own</option><option value="test">Test / not a lead</option></select>' +
+    var html = followupHtml() + '<div class="sum" id="sum">' + sumHtml() + '</div>';
+    html += '<div class="filters"><select id="lf"><option value="all">All leads</option><option value="real">Real leads only</option><option value="engine">Handled by the engine</option><option value="rel">Existing contact owner</option><option value="repeat">Repeat enquiries</option><option value="skip">Left alone</option><option value="moved">Moved or changed</option><option value="self">Partner\'s own</option><option value="fu_overdue">Follow-up overdue</option><option value="fu_late">Follow-up late</option><option value="test">Test / not a lead</option></select>' +
             '<input id="lq" type="search" placeholder="Search name, development, partner..." value="' + h(state.lq) + '"><span class="muted">' + rows.length + ' shown</span></div>';
-    html += '<div class="wrapl"><table class="leads"><thead><tr><th>When</th><th>Contact</th><th>Development</th><th>Source</th><th>What happened</th><th>Engine &rarr;</th><th>Outcome</th><th>Partner now</th><th></th></tr></thead><tbody>';
+    html += '<div class="wrapl"><table class="leads"><thead><tr><th>When</th><th>Contact</th><th>Development</th><th>Source</th><th>What happened</th><th>Engine &rarr;</th><th>Outcome</th><th title="Core hours from allocation to the first partner activity in Rex (target 4)">Follow-up</th><th>Partner now</th><th></th></tr></thead><tbody>';
     rows.forEach(function (L) { html += rowHtml(L); });
     html += '</tbody></table></div>';
     if (!rows.length) html += '<p class="muted">Nothing matches.</p>';

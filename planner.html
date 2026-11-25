@@ -6,7 +6,13 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v2.1.0 (25 Nov 2026)
+  HausOS partner availability planner v2.2.0 (25 Nov 2026)
+  v2.2.0 (David, 25 Nov: "select a partner and see what they would see"). Admins get a "View as"
+  selector beside Refresh. Choosing a partner reloads both tabs exactly as that partner sees them
+  (their column editable-looking, others read only, names on their own leads only, their own
+  follow-up row and the team's, no Test / Not a lead buttons). It is a preview: an amber banner
+  says so, clicks on the grid save nothing, and the API refuses any change sent with view_as.
+  "Back to my view" or choosing "Me" returns to the admin view. API v1.9.0 (view_as).
   v2.1.0 (David, 25 Nov: partner rule 4 - follow up within 4 working hours). Leads tab: a "Follow-up"
   column per lead - the core hours (8am-8pm, 7 days) from allocation to the partner's first activity
   on the lead or its contact in Rex: green tick within 4 hours, amber "late", grey "waiting", red
@@ -218,6 +224,8 @@
   .futab td { text-align:right; padding:4px 10px; border-bottom:1px solid #f1f5f9; font-variant-numeric:tabular-nums; white-space:nowrap; }
   .futab tr.team td { font-weight:600; border-top:2px solid var(--line); } .futab td.bad { color:var(--no); font-weight:700; } .futab td.warn { color:#b45309; }
   .fuwrap { overflow:auto; margin:0 0 10px; }
+  #viewas { width:auto; padding:6px 8px; font-size:13px; border-radius:7px; }
+  .preview { background:#fef3c7; border:1px solid #f59e0b; color:#78350f; border-radius:8px; padding:8px 12px; margin:0 0 12px; font-size:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .tbtn { font:inherit; font-size:12px; padding:4px 8px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; white-space:nowrap; }
   .tbtn.on { background:#fee2e2; border-color:#fecaca; color:#991b1b; }
   .wrapl { overflow:auto; border:1px solid var(--line); border-radius:10px; max-height:72vh; }
@@ -239,9 +247,10 @@
 <main>
   <div class="top">
     <div><h1>Partners and leads</h1><p class="sub" id="sub">Loading...</p></div>
-    <div id="topbtns" class="hidden"><span class="muted" id="refreshed"></span> <button class="btn ghost sm" id="refbtn">Refresh</button> <button class="btn ghost sm" id="outbtn">Sign out</button></div>
+    <div id="topbtns" class="hidden"><span class="muted" id="refreshed"></span> <select id="viewas" class="hidden" title="See the planner exactly as a partner sees it (preview - nothing is saved)"></select> <button class="btn ghost sm" id="refbtn">Refresh</button> <button class="btn ghost sm" id="outbtn">Sign out</button></div>
   </div>
   <div class="tabs hidden" id="tabs"><button class="tab on" data-tab="planner">Planner</button><button class="tab" data-tab="leads">Leads (last 14 days)</button></div>
+  <div id="preview" class="preview hidden"></div>
   <div id="view"></div>
   <p class="muted" id="foot"></p>
 </main>
@@ -251,7 +260,7 @@
   var API = "https://mlhvcyrjycdnswdfsofc.supabase.co/functions/v1/partner-availability";
   var SHOW_WEEKS = 8, STEP_WEEKS = 8;
   var view = document.getElementById("view"), sub = document.getElementById("sub"), foot = document.getElementById("foot"), topbtns = document.getElementById("topbtns");
-  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, off: {}, skew: 0, mode: null, live: false, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, followup: null, lf: "all", lq: "", keep: {}, counts: null, refreshed: null };   // off["partner|day|slot"] = true (slot 1 = 8-12, 2 = 12-4, 3 = 4-8); keep[lead_id] = row toggled since the last full render (stays visible)
+  var state = { session: null, data: null, showWeeks: SHOW_WEEKS, off: {}, skew: 0, mode: null, viewAs: null, live: false, tab: (location.hash === "#leads" ? "leads" : null) || load("hausos_planner_tab") || "planner", leads: null, followup: null, lf: "all", lq: "", keep: {}, counts: null, refreshed: null };   // off["partner|day|slot"] = true (slot 1 = 8-12, 2 = 12-4, 3 = 4-8); keep[lead_id] = row toggled since the last full render (stays visible)
   var tabs = document.getElementById("tabs");
 
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -274,6 +283,7 @@
   function call(body) {
     var headers = { "content-type": "application/json" };
     if (state.session) headers.authorization = "Bearer " + state.session;
+    if (state.viewAs && (body.action === "list" || body.action === "leads" || body.action === "counts")) body.view_as = state.viewAs;   // v2.2.0: admin preview
     return fetch(API, { method: "POST", headers: headers, body: JSON.stringify(body) })
       .then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); });
   }
@@ -290,7 +300,30 @@
     (d.off || []).forEach(function (k) { map[k] = true; });
     state.off = map;
     state.skew = d.now ? (Date.parse(d.now) - Date.now()) || 0 : 0;
-    if (!state.mode) state.mode = load("hausos_planner_mode") || (isAdmin() ? "day" : "slot");
+    state.mode = isPreview() ? "slot" : (load("hausos_planner_mode") || (isAdmin() ? "day" : "slot"));
+    viewAsUi();
+  }
+  // v2.2.0: an admin looking at the planner as a partner would see it. Nothing is saved in a preview.
+  function isPreview() { return !!state.data && !!state.data.user.preview; }
+  function viewAsUi() {
+    var d = state.data, sel = document.getElementById("viewas"), ban = document.getElementById("preview");
+    var canPreview = d.user.role === "admin" || isPreview();
+    sel.classList.toggle("hidden", !canPreview);
+    if (canPreview) {
+      sel.innerHTML = '<option value="">View as: me</option>' + d.partners.map(function (p) { return '<option value="' + h(p.partner_id) + '">View as: ' + h(p.full_name) + '</option>'; }).join("");
+      sel.value = state.viewAs || "";
+      sel.onchange = function () { setViewAs(sel.value || null); };
+    }
+    ban.classList.toggle("hidden", !isPreview());
+    if (isPreview()) {
+      ban.innerHTML = '<span><b>Preview: you are seeing what ' + h(d.user.name) + ' sees.</b> Nothing you click here is saved.</span> <button class="btn ghost sm" id="backme">Back to my view</button>';
+      document.getElementById("backme").onclick = function () { setViewAs(null); };
+    }
+  }
+  function setViewAs(id) {
+    state.viewAs = id; state.leads = null; state.followup = null; state.counts = null;
+    refbtn.disabled = true; refbtn.textContent = "Loading...";
+    reload();
   }
   function isAdmin() { return !!state.data && state.data.user.role === "admin"; }
   function myId() { return state.data && state.data.user.partner_id ? String(state.data.user.partner_id) : null; }
@@ -333,7 +366,8 @@
 
   // ---- sign in
   function signedOut() {
-    state.session = null; store("hausos_planner_session", null);
+    state.session = null; state.viewAs = null; store("hausos_planner_session", null);
+    document.getElementById("preview").classList.add("hidden"); document.getElementById("viewas").classList.add("hidden");
     topbtns.classList.add("hidden"); tabs.classList.add("hidden"); sub.textContent = "Sign in to see and change partner availability. Partners: use the email address you sign in to Rex with."; foot.textContent = "";
     view.innerHTML = '<div class="card signin"><label for="email">Your email address</label><input id="email" type="email" autocomplete="email" placeholder="name@hausproperties.com">' +
       '<p class="err" id="err"></p><p><button class="btn" id="go">Email me a sign-in link</button></p>' +
@@ -382,11 +416,11 @@
   function render() {
     var d = state.data, admin = isAdmin(), allow = d.allowance || 6;
     topbtns.classList.remove("hidden");
-    sub.textContent = "Signed in as " + (d.user.name || d.user.email) + ". Today is " + longLabel(d.today) + ". Each day has three slots: 8-12, 12-4 and 4-8. " +
+    sub.textContent = (isPreview() ? "Viewing as " + d.user.name + " (preview)" : "Signed in as " + (d.user.name || d.user.email)) + ". Today is " + longLabel(d.today) + ". Each day has three slots: 8-12, 12-4 and 4-8. " +
       (admin ? "Click to mark a partner not available; click again to make them available. Past days are locked."
              : (myId() ? "Your column is the one with the dark bar. Click a slot to mark yourself not available; click again to undo. Slots that have started are locked, and everyone else's columns are read only."
                        : "You can see everyone's availability; your address is not linked to a partner, so nothing can be changed here."));
-    foot.textContent = "HausOS planner v2.1.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
+    foot.textContent = "HausOS planner v2.2.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div><p class="mineline" id="mineline"></p></div>';
     html += '<details class="how"><summary>How it works</summary><ul>' +
       '<li>You only get leads while you are available. A slot marked not available means no leads in that slot.</li>' +
@@ -410,7 +444,7 @@
     var today = document.querySelector("tr.today"), wrap = document.querySelector(".wrap"); if (today && wrap) wrap.scrollTop = Math.max(0, today.offsetTop - wrap.clientHeight / 3);
   }
   function setMode(m) {
-    state.mode = m === "slot" ? "slot" : "day"; store("hausos_planner_mode", state.mode);
+    state.mode = m === "slot" ? "slot" : "day"; if (!isPreview()) store("hausos_planner_mode", state.mode);
     var tbl = document.querySelector("table.grid"); if (tbl) { tbl.classList.toggle("mday", state.mode === "day"); tbl.classList.toggle("mslot", state.mode === "slot"); }
     document.querySelectorAll("#mode .seg").forEach(function (b) { b.classList.toggle("on", b.dataset.m === state.mode); b.onclick = function () { setMode(b.dataset.m); }; });
   }
@@ -703,7 +737,7 @@
     topbtns.classList.remove("hidden");
     sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and who has it now (as at the engine's last Rex pull). " +
       (isAdmin() ? "Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest." : "Contact names and Rex links show on your own leads only; other leads show the development, source and where they went.");
-    foot.textContent = "HausOS planner v2.1.0 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
+    foot.textContent = "HausOS planner v2.2.0 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
@@ -770,6 +804,7 @@
       var seg = ev.target.closest(".sl i"), slot = state.mode === "slot" && seg ? +seg.dataset.s : 0;
       var slots = (slot ? [slot] : [1, 2, 3]).filter(function (s) { return canEdit(p, day, s); });
       if (!slots.length) { toast(slot ? "That slot has already started, so it is locked." : "Today's slots have all started, so they are locked."); return; }
+      if (isPreview()) { toast("Preview only - " + d.user.name + " could change this, but nothing is saved from here."); return; }
       var makeOff = !slots.every(function (s) { return slotOff(p, day, s); });
       var before = [1, 2, 3].map(function (s) { return slotOff(p, day, s); });
       function settle(arr) { [1, 2, 3].forEach(function (s, i) { setOff(p, day, s, !!arr[i]); }); td.classList.remove("busy"); repaint(p, day); }

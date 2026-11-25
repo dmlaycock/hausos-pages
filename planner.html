@@ -6,7 +6,13 @@
 <meta name="robots" content="noindex,nofollow">
 <title>HausOS - partners and leads</title>
 <!--
-  HausOS partner availability planner v2.2.0 (25 Nov 2026)
+  HausOS partner availability planner v2.3.0 (25 Nov 2026)
+  v2.3.0 (David, 25 Nov). (1) "View as" is no longer read only: an admin viewing as a partner can
+  change that partner's availability exactly as the partner could (their own column, slots that
+  have not started). The change is saved and recorded against the admin "as" the partner; the
+  amber banner says so. (2) Leads tab for a partner: their own leads from the last 14 days only
+  (other partners' leads are no longer listed). (3) Planner tab for a partner: the other partners'
+  columns are narrow, their own column is wide. API v1.10.0.
   v2.2.0 (David, 25 Nov: "select a partner and see what they would see"). Admins get a "View as"
   selector beside Refresh. Choosing a partner reloads both tabs exactly as that partner sees them
   (their column editable-looking, others read only, names on their own leads only, their own
@@ -154,6 +160,12 @@
   table.grid.mslot td.cell .sl i.ed:hover { box-shadow:inset 0 0 0 2px #34d399; }
   table.grid.mslot td.cell .sl i.ed:hover::after { content:attr(data-l); }
   .grid th.mine { box-shadow:inset 0 4px 0 #111827; }
+  /* v2.3.0: a partner's view - their own column wide, everyone else's narrow */
+  table.grid.prole { width:auto; }
+  table.grid.prole th.st-p { width:38px; padding-left:1px; padding-right:1px; font-size:11px; letter-spacing:0; }
+  table.grid.prole th.st-p.mine { width:260px; font-size:13px; }
+  table.grid.prole th.st-n, table.grid.prole th.st-r { font-size:11px; padding-left:0; padding-right:0; letter-spacing:0; }
+  table.grid.prole td.cell:not(.mine) { font-size:11px; }
   .grid td.mine { box-shadow:inset 1px 0 0 #cbd5e1, inset -1px 0 0 #cbd5e1; }
   .mode { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13px; color:var(--muted); margin:0 0 8px; }
   .mode .seg { font:inherit; font-size:13px; padding:5px 11px; border:1px solid #cbd5e1; background:#fff; color:var(--ink); cursor:pointer; }
@@ -240,14 +252,14 @@
     .leads td.c { font-weight:600; font-size:14px; }
   }
   @media (max-width:640px) { .grid th:first-child, .grid td:first-child { width:64px; min-width:64px; } .grid th { padding:8px 2px; } .grid td.day { padding:4px 5px; }
-    table.grid.prole th.mine { width:40%; } .grid td.cell { height:38px; } .grid td.mine .sl i { font-size:10px; } }
+    table.grid.prole { width:100%; } table.grid.prole th.st-p { width:30px; } table.grid.prole th.st-p.mine { width:auto; } .grid td.cell { height:38px; } .grid td.mine .sl i { font-size:10px; } }
 </style>
 </head>
 <body>
 <main>
   <div class="top">
     <div><h1>Partners and leads</h1><p class="sub" id="sub">Loading...</p></div>
-    <div id="topbtns" class="hidden"><span class="muted" id="refreshed"></span> <select id="viewas" class="hidden" title="See the planner exactly as a partner sees it (preview - nothing is saved)"></select> <button class="btn ghost sm" id="refbtn">Refresh</button> <button class="btn ghost sm" id="outbtn">Sign out</button></div>
+    <div id="topbtns" class="hidden"><span class="muted" id="refreshed"></span> <select id="viewas" class="hidden" title="See and use the planner exactly as a partner does (availability changes are saved)"></select> <button class="btn ghost sm" id="refbtn">Refresh</button> <button class="btn ghost sm" id="outbtn">Sign out</button></div>
   </div>
   <div class="tabs hidden" id="tabs"><button class="tab on" data-tab="planner">Planner</button><button class="tab" data-tab="leads">Leads (last 14 days)</button></div>
   <div id="preview" class="preview hidden"></div>
@@ -283,7 +295,7 @@
   function call(body) {
     var headers = { "content-type": "application/json" };
     if (state.session) headers.authorization = "Bearer " + state.session;
-    if (state.viewAs && (body.action === "list" || body.action === "leads" || body.action === "counts")) body.view_as = state.viewAs;   // v2.2.0: admin preview
+    if (state.viewAs && (body.action === "list" || body.action === "leads" || body.action === "counts" || body.action === "toggle")) body.view_as = state.viewAs;   // v2.2.0: admin preview
     return fetch(API, { method: "POST", headers: headers, body: JSON.stringify(body) })
       .then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); });
   }
@@ -316,7 +328,7 @@
     }
     ban.classList.toggle("hidden", !isPreview());
     if (isPreview()) {
-      ban.innerHTML = '<span><b>Preview: you are seeing what ' + h(d.user.name) + ' sees.</b> Nothing you click here is saved.</span> <button class="btn ghost sm" id="backme">Back to my view</button>';
+      ban.innerHTML = '<span><b>You are viewing as ' + h(d.user.name) + '.</b> You see what they see, and changes you make to their availability here are saved.</span> <button class="btn ghost sm" id="backme">Back to my view</button>';
       document.getElementById("backme").onclick = function () { setViewAs(null); };
     }
   }
@@ -416,11 +428,11 @@
   function render() {
     var d = state.data, admin = isAdmin(), allow = d.allowance || 6;
     topbtns.classList.remove("hidden");
-    sub.textContent = (isPreview() ? "Viewing as " + d.user.name + " (preview)" : "Signed in as " + (d.user.name || d.user.email)) + ". Today is " + longLabel(d.today) + ". Each day has three slots: 8-12, 12-4 and 4-8. " +
+    sub.textContent = (isPreview() ? "Viewing as " + d.user.name : "Signed in as " + (d.user.name || d.user.email)) + ". Today is " + longLabel(d.today) + ". Each day has three slots: 8-12, 12-4 and 4-8. " +
       (admin ? "Click to mark a partner not available; click again to make them available. Past days are locked."
              : (myId() ? "Your column is the one with the dark bar. Click a slot to mark yourself not available; click again to undo. Slots that have started are locked, and everyone else's columns are read only."
                        : "You can see everyone's availability; your address is not linked to a partner, so nothing can be changed here."));
-    foot.textContent = "HausOS planner v2.2.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
+    foot.textContent = "HausOS planner v2.3.0 (API v" + d.version + "). The allocation engine reads this the moment a lead arrives. Cell numbers are leads received that day (last 7 days); L7D and per day are the engine's own counts - from its last Rex pull, or live after Refresh.";
     var html = '<div class="card"><div class="strip">' + stripHtml() + '</div><p class="mineline" id="mineline"></p></div>';
     html += '<details class="how"><summary>How it works</summary><ul>' +
       '<li>You only get leads while you are available. A slot marked not available means no leads in that slot.</li>' +
@@ -428,7 +440,7 @@
       '<li>Leads are allocated around the clock. Overnight (8pm to 8am) you are treated as available only if you are available in the 4-8 slot before and the 8-12 slot after, so there is nothing to fill in for the night.</li>' +
       '<li>There is no expectation to follow up outside 8am to 8pm. Within those hours, follow up within 4 working hours - an update on the lead in Rex counts as the follow-up (a note, call, SMS, email, reminder, appointment or processing the lead). The Leads tab shows the time taken on each of your leads.</li>' +
       '<li>You can change any slot that has not started yet. Past slots are locked, so the record of who was available stays as it was.</li>' +
-      '<li>Everyone can see everyone\'s availability and the lead counts. The Leads tab shows every lead and where it went; names show on your own leads only.</li></ul></details>';
+      '<li>Everyone can see everyone\'s availability and the lead counts. The Leads tab shows your own leads from the last 14 days.</li></ul></details>';
     html += '<div class="legend"><span><i style="background:var(--away)"></i>Not available (each cell: 8-12 | 12-4 | 4-8)</span><span><i style="background:var(--over)"></i>Beyond ' + allow + ' slots in 7 days - reduces share</span><span><i style="background:#fff"></i>Available</span><span><i style="background:var(--locked)"></i>Locked</span>' +
             '<span><i style="background:var(--ok)"></i><b>NEXT</b> = due the next lead</span><span><i style="background:#1d4ed8"></i><i style="background:#3b82f6"></i><i style="background:#93c5fd"></i>2nd, 4th... = which lead they get next if nothing changes (darker = sooner)</span><span><i style="background:#e5e7eb"></i>Away now</span></div>';
     html += '<p class="muted" style="margin:0 0 8px">' + d.partners.map(function (p) { return '<b>' + h(initials(p.full_name)) + '</b> ' + h(p.full_name); }).join(' &middot; ') + '<span id="asat" style="display:block;margin-top:2px"></span></p>';
@@ -721,6 +733,11 @@
       '<td class="act">' + actHtml(L) + '</td></tr>';
   }
   function sumHtml() {
+    if (!isAdmin()) {   // v2.3.0: a partner's own leads
+      var m = { total: 0, moved: 0, self: 0 };
+      state.leads.forEach(function (L) { if (excl(L)) return; m.total++; if (L.moved) m.moved++; if (L.self_created) m.self++; });
+      return '<span><b>' + m.total + '</b> ' + (m.total === 1 ? "lead" : "leads") + ' in the last 14 days</span>' + (m.moved ? '<span><b>' + m.moved + '</b> moved or changed</span>' : "") + (m.self ? '<span><b>' + m.self + '</b> created by you (not counted in fair share)</span>' : "");
+    }
     var n = { total: 0, engine: 0, fair: 0, rel: 0, dir: 0, skip: 0, test: 0, nl: 0, moved: 0, self: 0 };
     state.leads.forEach(function (L) {
       var x = excl(L);
@@ -735,9 +752,10 @@
     var d = state.data;
     state.keep = {};
     topbtns.classList.remove("hidden");
-    sub.textContent = "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and who has it now (as at the engine's last Rex pull). " +
-      (isAdmin() ? "Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest." : "Contact names and Rex links show on your own leads only; other leads show the development, source and where they went.");
-    foot.textContent = "HausOS planner v2.2.0 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
+    sub.textContent = isAdmin()
+      ? "Every lead the allocation engine received in the last 14 days, newest first - what it did and why, and who has it now (as at the engine's last Rex pull). Mark a lead as Test or Not a lead and it drops out of the partners' lead counts, the record and the daily digest."
+      : (isPreview() ? d.user.name + "'s" : "Your") + " leads from the last 14 days, newest first - how each one arrived, the follow-up time and who has it now (as at the engine's last Rex pull).";
+    foot.textContent = "HausOS planner v2.3.0 (API v" + d.version + "). 'Partner now' is the assignee at the engine's last Rex pull (refreshed at every lead, or press Refresh); everything is as at the last refresh.";
     if (!state.leads) { view.innerHTML = '<div class="card">Loading leads...</div>'; loadLeads(); return; }
     var all = state.leads, q = state.lq.toLowerCase();
     var rows = all.filter(function (L) {
@@ -804,7 +822,6 @@
       var seg = ev.target.closest(".sl i"), slot = state.mode === "slot" && seg ? +seg.dataset.s : 0;
       var slots = (slot ? [slot] : [1, 2, 3]).filter(function (s) { return canEdit(p, day, s); });
       if (!slots.length) { toast(slot ? "That slot has already started, so it is locked." : "Today's slots have all started, so they are locked."); return; }
-      if (isPreview()) { toast("Preview only - " + d.user.name + " could change this, but nothing is saved from here."); return; }
       var makeOff = !slots.every(function (s) { return slotOff(p, day, s); });
       var before = [1, 2, 3].map(function (s) { return slotOff(p, day, s); });
       function settle(arr) { [1, 2, 3].forEach(function (s, i) { setOff(p, day, s, !!arr[i]); }); td.classList.remove("busy"); repaint(p, day); }
